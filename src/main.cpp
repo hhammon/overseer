@@ -1,5 +1,8 @@
 #include "core.hpp"
+#include "arena.hpp"
+#include "polling.hpp"
 #include "windows.hpp"
+
 #include "imgui.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
@@ -36,7 +39,7 @@ internal void do_ui() {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
 	ImGui::Begin(
-		"main",
+		"MainWindow",
 		NULL,
 		ImGuiWindowFlags_NoTitleBar            |
 		ImGuiWindowFlags_MenuBar               |
@@ -47,7 +50,12 @@ internal void do_ui() {
 		ImGuiWindowFlags_NoNavFocus
 	);
 
-	ImGui::Text("We have a window!");
+	if (ImPlot::BeginPlot("CPU", ImVec2(-1,ImGui::GetTextLineHeight()*10))) {
+		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+
+
+		ImPlot::EndPlot();
+	}
 
 	ImGui::End();
 	ImGui::PopStyleVar(3);
@@ -62,6 +70,8 @@ int WINAPI wWinMain(
 	unused_var(prev_instance);
 	unused_var(cmd_line);
 	unused_var(cmd_show);
+
+	scratch_init();
 
 	ImGui_ImplWin32_EnableDpiAwareness();
 	f32 main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(
@@ -290,3 +300,10 @@ internal s64 WINCALLBACK wnd_proc(
 
 	return DefWindowProcW(window, msg, w_param, l_param);
 }
+
+// Defined in Language Server config to prevent namespace pollution
+#ifndef UNITY_BUILD_NO_IMPL
+#include "arena.cpp"
+#include "core.cpp"
+#include "polling.cpp"
+#endif

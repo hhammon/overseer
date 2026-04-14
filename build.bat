@@ -20,7 +20,7 @@ for /D %%d in ("../src/third_party/*") do (
 	)
 )
 
-clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O0 -g -Wall -Wextra -Werror
-link /nologo /OUT:overseer.exe overseer.o %THIRD_PARTY_OBJ% /SUBSYSTEM:WINDOWS /DEBUG
+clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O0 -g -DBUILD_DEBUG=1 -Wall -Wextra -Werror
+link /nologo /OUT:overseer.exe overseer.o %THIRD_PARTY_OBJ% /SUBSYSTEM:WINDOWS /DEBUG /OPT:REF
 
 popd

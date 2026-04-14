@@ -10,6 +10,7 @@
 #include "core.hpp"
 
 #define WINAPI      __stdcall
+#define NTAPI       __stdcall
 #define WINCALLBACK __stdcall
 #define DLLIMPORT no_mangle __declspec(dllimport)
 
@@ -25,15 +26,413 @@ typedef Handle HCursor;
 typedef Handle HBrush;
 typedef Handle HMenu;
 
+typedef s32 NtStatus;
+
 typedef s32 HResult;
 #define SUCCEEDED(result) ((bool)((HResult)(result) >= 0))
 #define FAILED(   result) ((bool)((HResult)(result) <  0))
+
+/**
+ * ==========
+ * WINTERNALS
+ * ==========
+ *
+ * These are APIs that are close to the kernel and aren't really designed for regular linking. Much of this isn't
+ * even properly documented or included in Windows header files and so is needed here. For this jam project, I'm
+ * not going to be thinking too hard about whether APIs are stable and for which versions of Windows things will
+ * work, but that is a concern to have. -hhammon
+ *
+ * Much thanks to [Geoff Chappell](geoffchappell.com) for his reverse-engineering work.
+ */
+
+// NOTE(hhammon) @NtStatus If the value in NtStatus ever becomes relevant, locate it here:
+// #include <ntstatus.h>
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi/system_information_class.htm
+ */
+enum SysInfoClass {
+	SysInfoClass_SYSTEM_BASIC_INFORMATION                                    = 0x00, //all
+	SysInfoClass_SYSTEM_PROCESSOR_INFORMATION                                = 0x01, //all
+	SysInfoClass_SYSTEM_PERFORMANCE_INFORMATION                              = 0x02, //all
+	SysInfoClass_SYSTEM_TIME_OF_DAY_INFORMATION                              = 0x03, //all
+	SysInfoClass_SYSTEM_PATH_INFORMATION                                     = 0x04, //all
+	SysInfoClass_SYSTEM_PROCESS_INFORMATION                                  = 0x05, //all
+	SysInfoClass_SYSTEM_CALL_COUNT_INFORMATION                               = 0x06, //all
+	SysInfoClass_SYSTEM_DEVICE_INFORMATION                                   = 0x07, //all
+	SysInfoClass_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION                    = 0x08, //all
+	SysInfoClass_SYSTEM_FLAGS_INFORMATION                                    = 0x09, //all
+	SysInfoClass_SYSTEM_CALL_TIME_INFORMATION                                = 0x0A, //all
+	SysInfoClass_SYSTEM_MODULE_INFORMATION                                   = 0x0B, //all
+	SysInfoClass_SYSTEM_LOCKS_INFORMATION                                    = 0x0C, //all
+	SysInfoClass_SYSTEM_STACK_TRACE_INFORMATION                              = 0x0D, //all
+	SysInfoClass_SYSTEM_PAGED_POOL_INFORMATION                               = 0x0E, //all
+	SysInfoClass_SYSTEM_NON_PAGED_POOL_INFORMATION                           = 0x0F, //all
+	SysInfoClass_SYSTEM_HANDLE_INFORMATION                                   = 0x10, //all
+	SysInfoClass_SYSTEM_OBJECT_INFORMATION                                   = 0x11, //all
+	SysInfoClass_SYSTEM_PAGE_FILE_INFORMATION                                = 0x12, //all
+	SysInfoClass_SYSTEM_VDM_INSTEMUL_INFORMATION                             = 0x13, //all
+	SysInfoClass_SYSTEM_VDM_BOP_INFORMATION                                  = 0x14, //all
+	SysInfoClass_SYSTEM_FILE_CACHE_INFORMATION                               = 0x15, //all
+	SysInfoClass_SYSTEM_POOL_TAG_INFORMATION                                 = 0x16, //3.50 and higher
+	SysInfoClass_SYSTEM_INTERRUPT_INFORMATION                                = 0x17, //3.51 and higher
+	SysInfoClass_SYSTEM_DPC_BEHAVIOR_INFORMATION                             = 0x18, //3.51 and higher
+	SysInfoClass_SYSTEM_FULL_MEMORY_INFORMATION                              = 0x19, //4.0 and higher
+	SysInfoClass_SYSTEM_LOAD_GDI_DRIVER_INFORMATION                          = 0x1A, //3.51 and higher
+	SysInfoClass_SYSTEM_UNLOAD_GDI_DRIVER_INFORMATION                        = 0x1B, //3.51 and higher
+	SysInfoClass_SYSTEM_TIME_ADJUSTMENT_INFORMATION                          = 0x1C, //3.50 and higher
+	SysInfoClass_SYSTEM_SUMMARY_MEMORY_INFORMATION                           = 0x1D, //4.0 and higher
+	SysInfoClass_SYSTEM_MIRROR_MEMORY_INFORMATION                            = 0x1E, //5.1 and higher
+	SysInfoClass_SYSTEM_PERFORMANCE_TRACE_INFORMATION                        = 0x1F, //6.0 and higher
+	SysInfoClass_SYSTEM_OBSOLETE0                                            = 0x20, //5.1 and higher
+	SysInfoClass_SYSTEM_EXCEPTION_INFORMATION                                = 0x21, //3.50 and higher
+	SysInfoClass_SYSTEM_CRASH_DUMP_STATE_INFORMATION                         = 0x22, //3.50 and higher
+	SysInfoClass_SYSTEM_KERNEL_DEBUGGER_INFORMATION                          = 0x23, //3.50 and higher
+	SysInfoClass_SYSTEM_CONTEXT_SWITCH_INFORMATION                           = 0x24, //3.50 and higher
+	SysInfoClass_SYSTEM_REGISTRY_QUOTA_INFORMATION                           = 0x25, //3.51 and higher
+	SysInfoClass_SYSTEM_EXTEND_SERVICE_TABLE_INFORMATION                     = 0x26, //3.51 and higher
+	SysInfoClass_SYSTEM_PRIORITY_SEPERATION                                  = 0x27, //3.51 and higher
+	SysInfoClass_SYSTEM_VERIFIER_ADD_DRIVER_INFORMATION                      = 0x28, //5.1 and higher
+	SysInfoClass_SYSTEM_VERIFIER_REMOVE_DRIVER_INFORMATION                   = 0x29, //5.1 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_IDLE_INFORMATION                           = 0x2A, //5.1 and higher
+	SysInfoClass_SYSTEM_LEGACY_DRIVER_INFORMATION                            = 0x2B, //5.0 and higher
+	SysInfoClass_SYSTEM_CURRENT_TIME_ZONE_INFORMATION                        = 0x2C, //4.0 and higher
+	SysInfoClass_SYSTEM_LOOKASIDE_INFORMATION                                = 0x2D, //4.0 and higher
+	SysInfoClass_SYSTEM_TIME_SLIP_NOTIFICATION                               = 0x2E, //5.0 and higher
+	SysInfoClass_SYSTEM_SESSION_CREATE                                       = 0x2F, //5.0 and higher
+	SysInfoClass_SYSTEM_SESSION_DETACH                                       = 0x30, //5.0 and higher
+	SysInfoClass_SYSTEM_SESSION_INFORMATION                                  = 0x31, //5.0 and higher
+	SysInfoClass_SYSTEM_RANGE_START_INFORMATION                              = 0x32, //5.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_INFORMATION                                 = 0x33, //5.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_THUNK_EXTEND                                = 0x34, //5.0 and higher
+	SysInfoClass_SYSTEM_SESSION_PROCESS_INFORMATION                          = 0x35, //5.0 and higher
+	SysInfoClass_SYSTEM_LOAD_GDI_DRIVER_IN_SYSTEM_SPACE                      = 0x36, //5.1 and higher
+	SysInfoClass_SYSTEM_NUMA_PROCESSOR_MAP                                   = 0x37, //5.1 and higher
+	SysInfoClass_SYSTEM_PREFETCHER_INFORMATION                               = 0x38, //5.1 and higher
+	SysInfoClass_SYSTEM_EXTENDED_PROCESS_INFORMATION                         = 0x39, //5.1 and higher
+	SysInfoClass_SYSTEM_RECOMMENDED_SHARED_DATA_ALIGNMENT                    = 0x3A, //5.1 and higher
+	SysInfoClass_SYSTEM_COM_PLUS_PACKAGE                                     = 0x3B, //5.1 and higher
+	SysInfoClass_SYSTEM_NUMA_AVAILABLE_MEMORY                                = 0x3C, //5.1 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_POWER_INFORMATION                          = 0x3D, //5.1 and higher
+	SysInfoClass_SYSTEM_EMULATION_BASIC_INFORMATION                          = 0x3E, //5.1 and higher
+	SysInfoClass_SYSTEM_EMULATION_PROCESSOR_INFORMATION                      = 0x3F, //5.1 and higher
+	SysInfoClass_SYSTEM_EXTENDED_HANDLE_INFORMATION                          = 0x40, //5.1 and higher
+	SysInfoClass_SYSTEM_LOST_DELAYED_WRITE_INFORMATION                       = 0x41, //5.1 and higher
+	SysInfoClass_SYSTEM_BIG_POOL_INFORMATION                                 = 0x42, //5.2 and higher
+	SysInfoClass_SYSTEM_SESSION_POOL_TAG_INFORMATION                         = 0x43, //5.2 and higher
+	SysInfoClass_SYSTEM_SESSION_MAPPED_VIEW_INFORMATION                      = 0x44, //5.2 and higher
+	SysInfoClass_SYSTEM_HOTPATCH_INFORMATION                                 = 0x45, //late 5.1 and higher
+	SysInfoClass_SYSTEM_OBJECT_SECURITY_MODE                                 = 0x46, //late 5.1 and higher	earlier as 0x36
+	SysInfoClass_SYSTEM_WATCHDOG_TIMER_HANDLER                               = 0x47, //5.2 and higher
+	SysInfoClass_SYSTEM_WATCHDOG_TIMER_INFORMATION                           = 0x48, //5.2 and higher
+	SysInfoClass_SYSTEM_LOGICAL_PROCESSOR_INFORMATION                        = 0x49, //very late 5.1 and higher
+	SysInfoClass_SYSTEM_WOW64_SHARED_INFORMATION_OBSOLETE                    = 0x4A, //late 5.2 and higher
+	SysInfoClass_SYSTEM_REGISTER_FIRMWARE_TABLE_INFORMATION_HANDLER          = 0x4B, //late 5.2 and higher
+	SysInfoClass_SYSTEM_FIRMWARE_TABLE_INFORMATION                           = 0x4C, //late 5.2 and higher
+	SysInfoClass_SYSTEM_MODULE_INFORMATION_EX                                = 0x4D, //6.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_TRIAGE_INFORMATION                          = 0x4E, //6.0 and higher
+	SysInfoClass_SYSTEM_SUPERFETCH_INFORMATION                               = 0x4F, //6.0 and higher
+	SysInfoClass_SYSTEM_MEMORY_LIST_INFORMATION                              = 0x50, //6.0 and higher
+	SysInfoClass_SYSTEM_FILE_CACHE_INFORMATION_EX                            = 0x51, //late 5.2 and higher
+	SysInfoClass_SYSTEM_THREAD_PRIORITY_CLIENT_ID_INFORMATION                = 0x52, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_IDLE_CYCLE_TIME_INFORMATION                = 0x53, //6.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_CANCELLATION_INFORMATION                    = 0x54, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_POWER_INFORMATION_EX                       = 0x55, //6.0 and higher
+	SysInfoClass_SYSTEM_REF_TRACE_INFORMATION                                = 0x56, //6.0 and higher
+	SysInfoClass_SYSTEM_SPECIAL_POOL_INFORMATION                             = 0x57, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESS_ID_INFORMATION                               = 0x58, //6.0 and higher
+	SysInfoClass_SYSTEM_ERROR_PORT_INFORMATION                               = 0x59, //6.0 and higher
+	SysInfoClass_SYSTEM_BOOT_ENVIRONMENT_INFORMATION                         = 0x5A, //6.0 and higher
+	SysInfoClass_SYSTEM_HYPERVISOR_INFORMATION                               = 0x5B, //6.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_INFORMATION_EX                              = 0x5C, //6.0 and higher
+	SysInfoClass_SYSTEM_TIME_ZONE_INFORMATION                                = 0x5D, //6.0 and higher
+	SysInfoClass_SYSTEM_IMAGE_FILE_EXECUTION_OPTIONS_INFORMATION             = 0x5E, //6.0 and higher
+	SysInfoClass_SYSTEM_COVERAGE_INFORMATION                                 = 0x5F, //6.0 and higher
+	SysInfoClass_SYSTEM_PREFETCH_PATCH_INFORMATION                           = 0x60, //6.0 and higher
+	SysInfoClass_SYSTEM_VERIFIER_FAULTS_INFORMATION                          = 0x61, //6.0 and higher
+	SysInfoClass_SYSTEM_SYSTEM_PARTITION_INFORMATION                         = 0x62, //6.0 and higher
+	SysInfoClass_SYSTEM_SYSTEM_DISK_INFORMATION                              = 0x63, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_PERFORMANCE_DISTRIBUTION                   = 0x64, //6.0 and higher
+	SysInfoClass_SYSTEM_NUMA_PROXIMITY_NODE_INFORMATION                      = 0x65, //6.0 and higher
+	SysInfoClass_SYSTEM_DYNAMIC_TIME_ZONE_INFORMATION                        = 0x66, //6.0 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_INFORMATION                           = 0x67, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_MICROCODE_UPDATE_INFORMATION               = 0x68, //6.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_BRAND_STRING                               = 0x69, //late 6.0 and higher
+	SysInfoClass_SYSTEM_VIRTUAL_ADDRESS_INFORMATION                          = 0x6A, //late 6.0 and higher
+	SysInfoClass_SYSTEM_LOGICAL_PROCESSOR_AND_GROUP_INFORMATION              = 0x6B, //6.1 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_CYCLE_TIME_INFORMATION                     = 0x6C, //6.1 and higher
+	SysInfoClass_SYSTEM_STORE_INFORMATION                                    = 0x6D, //6.1 and higher
+	SysInfoClass_SYSTEM_REGISTRY_APPEND_STRING                               = 0x6E, //6.1 and higher
+	SysInfoClass_SYSTEM_AIT_SAMPLING_VALUE                                   = 0x6F, //6.1 and higher
+	SysInfoClass_SYSTEM_VHD_BOOT_INFORMATION                                 = 0x70, //6.1 and higher
+	SysInfoClass_SYSTEM_CPU_QUOTA_INFORMATION                                = 0x71, //6.1 and higher
+	SysInfoClass_SYSTEM_NATIVE_BASIC_INFORMATION                             = 0x72, //6.1 and higher
+	SysInfoClass_SYSTEM_ERROR_PORT_TIMEOUTS                                  = 0x73, //6.1 and higher
+	SysInfoClass_SYSTEM_LOW_PRIORITY_IO_INFORMATION                          = 0x74, //6.1 and higher
+	SysInfoClass_SYSTEM_BOOT_ENTROPY_INFORMATION                             = 0x75, //6.1 and higher
+	SysInfoClass_SYSTEM_VERIFIER_COUNTERS_INFORMATION                        = 0x76, //6.1 and higher
+	SysInfoClass_SYSTEM_PAGED_POOL_INFORMATION_EX                            = 0x77, //6.1 and higher
+	SysInfoClass_SYSTEM_SYSTEM_PTES_INFORMATION_EX                           = 0x78, //6.1 and higher
+	SysInfoClass_SYSTEM_NODE_DISTANCE_INFORMATION                            = 0x79, //6.1 and higher
+	SysInfoClass_SYSTEM_ACPI_AUDIT_INFORMATION                               = 0x7A, //6.1 and higher
+	SysInfoClass_SYSTEM_BASIC_PERFORMANCE_INFORMATION                        = 0x7B, //6.1 and higher
+	SysInfoClass_SYSTEM_QUERY_PERFORMANCE_COUNTER_INFORMATION                = 0x7C, //late 6.1 and higher
+	SysInfoClass_SYSTEM_SESSION_BIG_POOL_INFORMATION                         = 0x7D, //6.2 and higher
+	SysInfoClass_SYSTEM_BOOT_GRAPHICS_INFORMATION                            = 0x7E, //6.2 and higher
+	SysInfoClass_SYSTEM_SCRUB_PHYSICAL_MEMORY_INFORMATION                    = 0x7F, //6.2 and higher
+	SysInfoClass_SYSTEM_BAD_PAGE_INFORMATION                                 = 0x80, //6.2 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_PROFILE_CONTROL_AREA                       = 0x81, //6.2 and higher
+	SysInfoClass_SYSTEM_COMBINE_PHYSICAL_MEMORY_INFORMATION                  = 0x82, //6.2 and higher
+	SysInfoClass_SYSTEM_ENTROPY_INTERRUPT_TIMING_INFORMATION                 = 0x83, //6.2 and higher
+	SysInfoClass_SYSTEM_CONSOLE_INFORMATION                                  = 0x84, //6.2 and higher
+	SysInfoClass_SYSTEM_PLATFORM_BINARY_INFORMATION                          = 0x85, //6.2 and higher
+	SysInfoClass_SYSTEM_POLICY_INFORMATION                                   = 0x86, //6.3 and higher
+	SysInfoClass_SYSTEM_HYPERVISOR_PROCESSOR_COUNT_INFORMATION               = 0x87, //6.2 and higher
+	SysInfoClass_SYSTEM_DEVICE_DATA_INFORMATION                              = 0x88, //6.2 and higher
+	SysInfoClass_SYSTEM_DEVICE_DATA_ENUMERATION_INFORMATION                  = 0x89, //6.2 and higher
+	SysInfoClass_SYSTEM_MEMORY_TOPOLOGY_INFORMATION                          = 0x8A, //6.2 and higher
+	SysInfoClass_SYSTEM_MEMORY_CHANNEL_INFORMATION                           = 0x8B, //6.2 and higher
+	SysInfoClass_SYSTEM_BOOT_LOGO_INFORMATION                                = 0x8C, //6.2 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION_EX                 = 0x8D, //6.2 and higher
+	SysInfoClass_SYSTEM_CRITICAL_PROCESS_ERROR_LOG_INFORMATION               = 0x8E, //1607 and higher
+	SysInfoClass_SYSTEM_SECURE_BOOT_POLICY_INFORMATION                       = 0x8F, //6.2 and higher
+	SysInfoClass_SYSTEM_PAGE_FILE_INFORMATION_EX                             = 0x90, //6.2 and higher
+	SysInfoClass_SYSTEM_SECURE_BOOT_INFORMATION                              = 0x91, //6.2 and higher
+	SysInfoClass_SYSTEM_ENTROPY_INTERRUPT_TIMING_RAW_INFORMATION             = 0x92, //6.2 and higher
+	SysInfoClass_SYSTEM_PORTABLE_WORKSPACE_EFI_LAUNCHER_INFORMATION          = 0x93, //6.2 and higher
+	SysInfoClass_SYSTEM_FULL_PROCESS_INFORMATION                             = 0x94, //6.2 and higher
+	SysInfoClass_SYSTEM_KERNEL_DEBUGGER_INFORMATION_EX                       = 0x95, //6.3 and higher
+	SysInfoClass_SYSTEM_BOOT_METADATA_INFORMATION                            = 0x96, //6.3 and higher
+	SysInfoClass_SYSTEM_SOFT_REBOOT_INFORMATION                              = 0x97, //6.3 and higher
+	SysInfoClass_SYSTEM_ELAM_CERTIFICATE_INFORMATION                         = 0x98, //6.3 and higher
+	SysInfoClass_SYSTEM_OFFLINE_DUMP_CONFIG_INFORMATION                      = 0x99, //6.3 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_FEATURES_INFORMATION                       = 0x9A, //6.3 and higher
+	SysInfoClass_SYSTEM_REGISTRY_RECONCILIATION_INFORMATION                  = 0x9B, //6.3 and higher
+	SysInfoClass_SYSTEM_EDID_INFORMATION                                     = 0x9C, //6.3 and higher
+	SysInfoClass_SYSTEM_MANUFACTURING_INFORMATION                            = 0x9D, //10.0 and higher
+	SysInfoClass_SYSTEM_ENERGY_ESTIMATION_CONFIG_INFORMATION                 = 0x9E, //10.0 and higher
+	SysInfoClass_SYSTEM_HYPERVISOR_DETAIL_INFORMATION                        = 0x9F, //10.0 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_CYCLE_STATS_INFORMATION                    = 0xA0, //10.0 and higher
+	SysInfoClass_SYSTEM_VM_GENERATION_COUNT_INFORMATION                      = 0xA1, //10.0 and higher
+	SysInfoClass_SYSTEM_TRUSTED_PLATFORM_MODULE_INFORMATION                  = 0xA2, //10.0 and higher
+	SysInfoClass_SYSTEM_KERNEL_DEBUGGER_FLAGS                                = 0xA3, //10.0 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_POLICY_INFORMATION                    = 0xA4, //10.0 and higher
+	SysInfoClass_SYSTEM_ISOLATED_USER_MODE_INFORMATION                       = 0xA5, //10.0 and higher
+	SysInfoClass_SYSTEM_HARDWARE_SECURITY_TEST_INTERFACE_RESULTS_INFORMATION = 0xA6, //10.0 and higher
+	SysInfoClass_SYSTEM_SINGLE_MODULE_INFORMATION                            = 0xA7, //10.0 and higher
+	SysInfoClass_SYSTEM_ALLOWED_CPU_SETS_INFORMATION                         = 0xA8, //10.0 and higher
+	SysInfoClass_SYSTEM_DMA_PROTECTION_INFORMATION                           = 0xA9, //10.0 and higher
+	SysInfoClass_SYSTEM_INTERRUPT_CPU_SETS_INFORMATION                       = 0xAA, //10.0 and higher
+	SysInfoClass_SYSTEM_SECURE_BOOT_POLICY_FULL_INFORMATION                  = 0xAB, //10.0 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_POLICY_FULL_INFORMATION               = 0xAC, //10.0 and higher
+	SysInfoClass_SYSTEM_AFFINITIZED_INTERRUPT_PROCESSOR_INFORMATION          = 0xAD, //10.0 and higher
+	SysInfoClass_SYSTEM_ROOT_SILO_INFORMATION                                = 0xAE, //10.0 and higher
+	SysInfoClass_SYSTEM_CPU_SET_INFORMATION                                  = 0xAF, //10.0 and higher
+	SysInfoClass_SYSTEM_CPU_SET_TAG_INFORMATION                              = 0xB0, //10.0 and higher
+	SysInfoClass_SYSTEM_WIN32_WER_START_CALLOUT                              = 0xB1, //1511 and higher
+	SysInfoClass_SYSTEM_SECURE_KERNEL_PROFILE_INFORMATION                    = 0xB2, //1511 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_PLATFORM_MANIFEST_INFORMATION         = 0xB3, //1607 and higher
+	SysInfoClass_SYSTEM_INTERRUPT_STEERING_INFORMATION                       = 0xB4, //1607 and higher
+	SysInfoClass_SYSTEM_SUPPPORTED_PROCESSOR_ARCHITECTURES                   = 0xB5, //1607 and higher
+	SysInfoClass_SYSTEM_MEMORY_USAGE_INFORMATION                             = 0xB6, //1607 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_CERTIFICATE_INFORMATION               = 0xB7, //1607 and higher
+	SysInfoClass_SYSTEM_PHYSICAL_MEMORY_INFORMATION                          = 0xB8, //1703 and higher
+	SysInfoClass_SYSTEM_CONTROL_FLOW_TRANSITION                              = 0xB9, //1703 and higher
+	SysInfoClass_SYSTEM_KERNEL_DEBUGGING_ALLOWED                             = 0xBA, //1703 and higher
+	SysInfoClass_SYSTEM_ACTIVITY_MODERATION_EXE_STATE                        = 0xBB, //1703 and higher
+	SysInfoClass_SYSTEM_ACTIVITY_MODERATION_USER_SETTINGS                    = 0xBC, //1703 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_POLICIES_FULL_INFORMATION             = 0xBD, //1703 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_UNLOCK_INFORMATION                    = 0xBE, //1703 and higher
+	SysInfoClass_SYSTEM_INTEGRITY_QUOTA_INFORMATION                          = 0xBF, //1703 and higher
+	SysInfoClass_SYSTEM_FLUSH_INFORMATION                                    = 0xC0, //1703 and higher
+	SysInfoClass_SYSTEM_PROCESSOR_IDLE_MASK_INFORMATION                      = 0xC1, //1709 and higher
+	SysInfoClass_SYSTEM_SECURE_DUMP_ENCRYPTION_INFORMATION                   = 0xC2, //1709 and higher
+	SysInfoClass_SYSTEM_WRITE_CONSTRAINT_INFORMATION                         = 0xC3, //1709 and higher
+	SysInfoClass_SYSTEM_KERNEL_VA_SHADOW_INFORMATION                         = 0xC4, //1803 and higher
+	SysInfoClass_SYSTEM_HYPERVISOR_SHARED_PAGE_INFORMATION                   = 0xC5, //1803 and higher
+	SysInfoClass_SYSTEM_FIRMWARE_BOOT_PERFORMANCE_INFORMATION                = 0xC6, //1803 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_VERIFICATION_INFORMATION              = 0xC7, //1803 and higher
+	SysInfoClass_SYSTEM_FIRMWARE_PARTITION_INFORMATION                       = 0xC8, //1803 and higher
+	SysInfoClass_SYSTEM_SPECULATION_CONTROL_INFORMATION                      = 0xC9, //1803 and higher
+	SysInfoClass_SYSTEM_DMA_GUARD_POLICY_INFORMATION                         = 0xCA, //1803 and higher
+	SysInfoClass_SYSTEM_ENCLAVE_LAUNCH_CONTROL_INFORMATION                   = 0xCB, //1803 and higher
+	SysInfoClass_SYSTEM_WORKLOAD_ALLOWED_CPU_SETS_INFORMATION                = 0xCC, //1809 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_UNLOCK_MODE_INFORMATION               = 0xCD, //1809 and higher
+	SysInfoClass_SYSTEM_LEAP_SECOND_INFORMATION                              = 0xCE, //1809 and higher
+	SysInfoClass_SYSTEM_FLAGS2_INFORMATION                                   = 0xCF, //1809 and higher
+	SysInfoClass_SYSTEM_SECURITY_MODEL_INFORMATION                           = 0xD0, //1903 and higher
+	SysInfoClass_SYSTEM_CODE_INTEGRITY_SYNTHETIC_CACHE_INFORMATION           = 0xD1, //1903 and higher
+	SysInfoClass_SYSTEM_FEATURE_CONFIGURATION_INFORMATION                    = 0xD2, //2004 and higher
+	SysInfoClass_SYSTEM_FEATURE_CONFIGURATION_SECTION_INFORMATION            = 0xD3, //2004 and higher
+	SysInfoClass_SYSTEM_FEATURE_USAGE_SUBSCRIPTION_INFORMATION               = 0xD4, //2004 and higher
+	SysInfoClass_SYSTEM_SECURE_SPECULATION_CONTROL_INFORMATION               = 0xD5, //2004 and higher
+};
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntquerysysteminformation
+ */
+DLLIMPORT NtStatus NTAPI NtQuerySystemInformation(
+	SysInfoClass sys_info_class,
+	void*        sys_info,
+	u32          sys_info_length,
+	u32*         return_length
+);
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi/system_basic_information.htm
+ * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntquerysysteminformation#systembasicinformation
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_BASIC_INFORMATION,
+ *     SystemBasicInformation* basic_info,
+ *     ...
+ * );
+ */
+struct SystemBasicInformation {
+	u32  obsolete;
+	u32  timer_resolution;
+	u32  page_size;
+	u32  number_of_physical_pages;
+	u32  lowest_physical_page_number;
+	u32  highest_physical_page_number;
+	u32  allocation_granularity;
+	uptr minimum_user_mode_address;
+	uptr maximum_user_mode_address;
+	u64  active_processor_affinity_mask;
+	u8   number_of_processors;
+};
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/api/ex/sysinfo/processor_performance.htm
+ * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntquerysysteminformation#system_processor_performance_information
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION,
+ *     SystemProcessorPerformanceInformation buffer[PROCESSOR_COUNT],
+ *     ...
+ * );
+ *
+ * All time values are counts of some interval given in SystemBasicInformation.timer_resolution.
+ * PROCESSOR_COUNT may likewise be retrieved through SystemBasicInformation.number_of_processors.
+ * Time is split between user and kernel, so, e.g., idle time is kernel time.
+ */
+struct SystemProcessorPerformanceInformation {
+	u64 idle_time;
+	u64 kernel_time;
+	u64 user_time;
+	u64 dpc_time;
+	u64 interrupt_time;
+	u32 interrupt_count;
+};
+
+/**
+ * ===============
+ * WINDOWS.H ET AL
+ * ===============
+ */
 
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-exitprocess
  */
 DLLIMPORT void WINAPI ExitProcess(
 	u32 exit_code
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/wtypesbase/ns-wtypesbase-security_attributes
+ */
+struct SecurityAttributes {
+	u32   length;
+	void* security_descriptor;
+	b32   inherit_handle;
+};
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createthread
+ */
+DLLIMPORT Handle WINAPI CreateThread(
+	SecurityAttributes* thread_attributes,
+	u64                 stack_size,
+	u32   (WINCALLBACK* start_address)(void* param),
+	void*               parameter,
+	u32                 creation_flags,
+	u32*                thread_id
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-sleep
+ */
+DLLIMPORT void WINAPI Sleep(
+	u32 milliseconds
+);
+
+#define PAGE_NOACCESS                   0x00000001
+#define PAGE_READONLY                   0x00000002
+#define PAGE_READWRITE                  0x00000004
+#define PAGE_WRITECOPY                  0x00000008
+#define PAGE_EXECUTE                    0x00000010
+#define PAGE_EXECUTE_READ               0x00000020
+#define PAGE_EXECUTE_READWRITE          0x00000040
+#define PAGE_EXECUTE_WRITECOPY          0x00000080
+#define PAGE_GUARD                      0x00000100
+#define PAGE_NOCACHE                    0x00000200
+#define PAGE_WRITECOMBINE               0x00000400
+#define PAGE_GRAPHICS_NOACCESS          0x00000800
+#define PAGE_GRAPHICS_READONLY          0x00001000
+#define PAGE_GRAPHICS_READWRITE         0x00002000
+#define PAGE_GRAPHICS_EXECUTE           0x00004000
+#define PAGE_GRAPHICS_EXECUTE_READ      0x00008000
+#define PAGE_GRAPHICS_EXECUTE_READWRITE 0x00010000
+#define PAGE_GRAPHICS_COHERENT          0x00020000
+#define PAGE_GRAPHICS_NOCACHE           0x00040000
+#define PAGE_ENCLAVE_THREAD_CONTROL     0x80000000
+#define PAGE_REVERT_TO_FILE_MAP         0x80000000
+#define PAGE_TARGETS_NO_UPDATE          0x40000000
+#define PAGE_TARGETS_INVALID            0x40000000
+#define PAGE_ENCLAVE_UNVALIDATED        0x20000000
+#define PAGE_ENCLAVE_MASK               0x10000000
+#define PAGE_ENCLAVE_DECOMMIT           (PAGE_ENCLAVE_MASK | 0)
+#define PAGE_ENCLAVE_SS_FIRST           (PAGE_ENCLAVE_MASK | 1)
+#define PAGE_ENCLAVE_SS_REST            (PAGE_ENCLAVE_MASK | 2)
+
+#define MEM_COMMIT                      0x00001000
+#define MEM_RESERVE                     0x00002000
+#define MEM_REPLACE_PLACEHOLDER         0x00004000
+#define MEM_RESERVE_PLACEHOLDER         0x00040000
+#define MEM_RESET                       0x00080000
+#define MEM_TOP_DOWN                    0x00100000
+#define MEM_WRITE_WATCH                 0x00200000
+#define MEM_PHYSICAL                    0x00400000
+#define MEM_ROTATE                      0x00800000
+#define MEM_DIFFERENT_IMAGE_BASE_OK     0x00800000
+#define MEM_RESET_UNDO                  0x01000000
+#define MEM_LARGE_PAGES                 0x20000000
+#define MEM_4MB_PAGES                   0x80000000
+#define MEM_64K_PAGES                   (MEM_LARGE_PAGES | MEM_PHYSICAL)
+#define MEM_UNMAP_WITH_TRANSIENT_BOOST  0x00000001
+#define MEM_COALESCE_PLACEHOLDERS       0x00000001
+#define MEM_PRESERVE_PLACEHOLDER        0x00000002
+#define MEM_DECOMMIT                    0x00004000
+#define MEM_RELEASE                     0x00008000
+#define MEM_FREE                        0x00010000
+
+/**
+ *https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
+ */
+DLLIMPORT void* WINAPI VirtualAlloc(
+	void* address,
+	u64   size,
+	u32   allocation_type,
+	u32   protect
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualfree
+ */
+DLLIMPORT b32 WINAPI VirtualFree(
+	void* address,
+	u64   size,
+	u32   free_type
 );
 
 /**
@@ -597,13 +996,6 @@ DLLIMPORT s64 WINAPI DefWindowProcW(
 	u32  msg,
 	u64  w_param,
 	s64  l_param
-);
-
-/**
- * https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-sleep
- */
-DLLIMPORT void WINAPI Sleep(
-	u32 milliseconds
 );
 
 /**
