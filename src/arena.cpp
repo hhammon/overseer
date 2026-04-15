@@ -1,6 +1,7 @@
 #include "arena.hpp"
 
 #include "windows.hpp"
+#include "stb_sprintf.h"
 #include <string.h>
 
 struct ArenaFrameRestoreData {
@@ -15,6 +16,10 @@ struct ArenaFrameRestoreData {
 
 api_method void scratch_init(u64 reserve) {
 	scratch_arena = arena_create(reserve);
+}
+
+api_method void scratch_destroy() {
+	arena_destroy(&scratch_arena);
 }
 
 api_method Arena arena_create(u64 reserve) {
@@ -113,4 +118,53 @@ api_method void arena_alloc_array(Arena* arena, u32 align, u64 item_size, void**
 api_method void arena_destroy(Arena* arena) {
 	VirtualFree(arena->base, arena->reserved, MEM_RELEASE);
 	*arena = {};
+}
+
+internal u8* arena_sprintf_cb(const u8* buf, void* user, s32 len) {
+	(void)buf;
+
+	Arena* arena = (Arena*)user;
+
+	if (len == STB_SPRINTF_MIN) {
+		return (u8*)arena_alloc_item(arena, 1, STB_SPRINTF_MIN);
+	} else {
+		arena->used -= STB_SPRINTF_MIN - len;
+		return NULL;
+	}
+}
+
+api_method StringZ arena_sprintf_va(Arena* arena, CString fmt, __builtin_va_list args) {
+	u64 used_before = arena->used;
+
+	u8* buf = (u8*)arena_alloc_item(arena, 1, STB_SPRINTF_MIN);
+
+	if (buf) {
+		stbsp_vsprintfcb((STBSP_SPRINTFCB*)arena_sprintf_cb, arena, (char*)buf, (char*)fmt, args);
+	}
+
+	u8* null_terminator = alloc_item(arena, u8);
+	if (null_terminator) {
+		*null_terminator = 0;
+	}
+
+	if (arena->frame_had_error) {
+		arena->used = used_before;
+		return (StringZ){ };
+	} else {
+		return (StringZ) {
+			.ptr = (char*)arena->base + used_before,
+			.len =        arena->used - used_before - 1,
+		};
+	}
+}
+
+api_method StringZ arena_sprintf(Arena* arena, CString fmt, ...) {
+	__builtin_va_list args;
+	__builtin_va_start(args, fmt);
+
+	StringZ result = arena_sprintf_va(arena, fmt, args);
+
+	__builtin_va_end(args);
+
+	return result;
 }

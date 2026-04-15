@@ -50,9 +50,53 @@ internal void do_ui() {
 		ImGuiWindowFlags_NoNavFocus
 	);
 
-	if (ImPlot::BeginPlot("CPU", ImVec2(-1,ImGui::GetTextLineHeight()*10))) {
-		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
+		CpuHistoryCircularBuffer cpu_history = polling_get_cpu_history();
+		CpuPercents* base   = cpu_history.base;
+		u64          length = cpu_history.length;
 
+		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+		ImPlot::SetupAxisLimits(ImAxis_X1, cpu_history.start, cpu_history.end, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100, ImGuiCond_Always);
+
+		ImPlotSpec spec = {};
+		spec.Offset = cpu_history.offset;
+		spec.Stride = sizeof(cpu_history.base[0]);
+
+		ImVec4 cpu_color    = ImVec4(0.2f, 0.8f, 1.0f, 1.0f);
+		ImVec4 kernel_color = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
+
+		spec.LineColor = cpu_color;
+		ImPlot::PlotLine("All", &base->time, &base->cpu, length, spec);
+		spec.LineColor = kernel_color;
+		ImPlot::PlotLine("Kernel", &base->time, &base->kernel, length, spec);
+
+		ImPlot::EndPlot();
+	}
+
+	if (ImPlot::BeginPlot("Memory Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
+		MemoryHistoryCircularBuffer memory_history = polling_get_memory_history();
+		MemoryPercents* base =   memory_history.base;
+		u64             length = memory_history.length;
+
+		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+		ImPlot::SetupAxisLimits(ImAxis_X1, memory_history.start, memory_history.end, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100, ImGuiCond_Always);
+
+		ImPlotSpec spec = {};
+		spec.Offset = memory_history.offset;
+		spec.Stride = sizeof(memory_history.base[0]);
+
+		ImVec4 ram_color    = ImVec4(0.8f, 0.3f, 0.7f, 1.0f);
+		ImVec4 swap_color   = ImVec4(0.8f, 0.5f, 0.1f, 1.0f);
+		ImVec4 commit_color = ImVec4(0.1f, 0.9f, 0.1f, 1.0f);
+
+		spec.LineColor = ram_color;
+		ImPlot::PlotLine("RAM", &base->time, &base->ram, length, spec);
+		spec.LineColor = swap_color;
+		ImPlot::PlotLine("Swap", &base->time, &base->swap, length, spec);
+		spec.LineColor = commit_color;
+		ImPlot::PlotLine("Commit", &base->time, &base->commit, length, spec);
 
 		ImPlot::EndPlot();
 	}
@@ -72,6 +116,8 @@ int WINAPI wWinMain(
 	unused_var(cmd_show);
 
 	scratch_init();
+
+	polling_begin();
 
 	ImGui_ImplWin32_EnableDpiAwareness();
 	f32 main_scale = ImGui_ImplWin32_GetDpiScaleForMonitor(
@@ -184,6 +230,8 @@ int WINAPI wWinMain(
 
 	destroy_render_device();
 	DestroyWindow(window);
+
+	polling_end();
 
 	return 0;
 }
@@ -306,4 +354,7 @@ internal s64 WINCALLBACK wnd_proc(
 #include "arena.cpp"
 #include "core.cpp"
 #include "polling.cpp"
+
+#define STB_SPRINTF_IMPLEMENTATION
+#include "stb_sprintf.h"
 #endif

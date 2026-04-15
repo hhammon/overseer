@@ -86,7 +86,7 @@ typedef s64      sprocptr;
  * Basic Types
  */
 
-typedef u8* CString;
+typedef char* CString;
 
 template<typename T>
 struct View {
@@ -96,7 +96,7 @@ struct View {
 	T& operator[](u64 index);
 };
 
-typedef View<u8> String;
+typedef View<char> String;
 typedef String   StringZ; // Guaranteed to be null-terminated
 
 #define S(literal) ((StringZ) { \
@@ -105,6 +105,15 @@ typedef String   StringZ; // Guaranteed to be null-terminated
 })
 
 typedef View<u8> Blob;
+
+#if BUILD_DEBUG
+
+#pragma section(".raddbg", read, write)
+#define raddbg_exe_data __declspec(allocate(".raddbg"))
+
+raddbg_exe_data u8 view_type_view[] = "type_view: {type: ```View<?>```, expr: ```slice($)```}";
+
+#endif // BUILD_DEBUG
 
 /**
  * Utility Macros
@@ -124,6 +133,12 @@ typedef View<u8> Blob;
 #define max(a, b) (((a) > (b)) ? (a) : (b))
 #define clamp(l, val, h) (max(l, min(val, h)))
 
+#define swap_vars(a, b) do { \
+	auto temp = a;      \
+	a = b;              \
+	b = temp;           \
+} while (0)
+
 #if BUILD_DEBUG
 
 #define assert(cond) do {      \
@@ -134,10 +149,18 @@ typedef View<u8> Blob;
 
 #define debug_only if (1)
 
+#define debug_log(fmt, ...) do {                        \
+	scratch_begin();                                    \
+	StringZ msg = scratch_sprintf(fmt, __VA_ARGS__); \
+	scratch_end();                                      \
+	OutputDebugStringA(msg.ptr);                        \
+} while (0);
+
 #else
 
 #define assert(cond) ((void)(cond))
 #define debug_only if (0)
+#define debug_log(fmt, ...)
 
 #endif
 

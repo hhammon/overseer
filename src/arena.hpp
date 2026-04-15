@@ -19,13 +19,16 @@ struct Arena {
 thread_local Arena scratch_arena;
 
 api_method void scratch_init(u64 reserve = SCRATCH_RESERVE_SIZE);
+api_method void scratch_destroy();
 
-api_method Arena arena_create(u64 reserve);
-api_method void  arena_frame_begin(Arena* arena);
-api_method void  arena_frame_end  (Arena* arena);
-api_method void* arena_alloc_item (Arena* arena, u32 align, u64 size);
-api_method void  arena_alloc_array(Arena* arena, u32 align, u64 item_size, void** base, u64* len);
-api_method void  arena_destroy    (Arena* arena);
+api_method Arena   arena_create(u64 reserve);
+api_method void    arena_frame_begin(Arena* arena);
+api_method void    arena_frame_end  (Arena* arena);
+api_method void*   arena_alloc_item (Arena* arena, u32 align, u64 size);
+api_method void    arena_alloc_array(Arena* arena, u32 align, u64 item_size, void** base, u64* len);
+api_method void    arena_destroy    (Arena* arena);
+api_method StringZ arena_sprintf_va (Arena* arena, CString fmt, __builtin_va_list args);
+api_method StringZ arena_sprintf    (Arena* arena, CString fmt, ...);
 
 #define alloc_item(arena_ptr, Type) \
 ((Type*)arena_alloc_item((arena_ptr), alignof(Type), sizeof(Type)))
@@ -44,5 +47,8 @@ api_method void  arena_destroy    (Arena* arena);
 
 #define scratch_alloc_item(Type)      alloc_item( &scratch_arena, Type)
 #define scratch_alloc_array(view_ptr) alloc_array(&scratch_arena, view_ptr)
+
+#define scratch_sprintf_va(fmt, args) arena_sprintf_va(&scratch_arena, fmt, args)
+#define scratch_sprintf(   fmt, ... ) arena_sprintf   (&scratch_arena, fmt, ## __VA_ARGS__)
 
 #endif // __ARENA_HPP__

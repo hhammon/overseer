@@ -2,6 +2,7 @@
 #define __WINDOWS_HPP__
 
 #pragma comment(lib, "libcmt.lib")
+#pragma comment(lib, "ntdll.lib")
 #pragma comment(lib, "kernel32.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "gdi32.lib")
@@ -42,11 +43,11 @@ typedef s32 HResult;
  * not going to be thinking too hard about whether APIs are stable and for which versions of Windows things will
  * work, but that is a concern to have. -hhammon
  *
- * Much thanks to [Geoff Chappell](geoffchappell.com) for his reverse-engineering work.
+ * Much thanks to [Geoff Chappell](geoffchappell.com) and others for their reverse-engineering work.
  */
 
 // NOTE(hhammon) @NtStatus If the value in NtStatus ever becomes relevant, locate it here:
-// #include <ntstatus.h>
+#include <ntstatus.h>
 
 /**
  * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi/system_information_class.htm
@@ -308,7 +309,7 @@ struct SystemBasicInformation {
  *
  * NtQuerySystemInformation(
  *     SysInfoClass_SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION,
- *     SystemProcessorPerformanceInformation buffer[PROCESSOR_COUNT],
+ *     SystemProcessorPerformanceInformation processor_perf_stats_buffer[PROCESSOR_COUNT],
  *     ...
  * );
  *
@@ -323,6 +324,138 @@ struct SystemProcessorPerformanceInformation {
 	u64 dpc_time;
 	u64 interrupt_time;
 	u32 interrupt_count;
+};
+
+/**
+ * https://ntdoc.m417z.com/unicode_string
+ */
+struct UnicodeString {
+	u16      length;
+	u16      maximum_length;
+	wchar_t* buffer;
+};
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/api/ex/sysinfo/pagefile.htm
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_PAGE_FILE_INFORMATION,
+ *     SystemPageFileInformation* page_file_info,
+ *     ...
+ * );
+ */
+struct SystemPageFileInformation {
+	u32           next_entry_offset;
+	u32           total_size;
+	u32           total_in_use;
+	u32           peak_usage;
+	UnicodeString page_file_name;
+};
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/api/ex/sysinfo/pagefile_ex.htm
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_PAGE_FILE_INFORMATION_EX,
+ *     SystemPageFileInformationEx* page_file_info,
+ *     ...
+ * );
+ */
+struct SystemPageFileInformationEx {
+	SystemPageFileInformation info;
+	u32                       minimum_size;
+	u32                       maximum_size;
+};
+
+/**
+ * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/api/ex/sysinfo/performance.htm
+ * https://ntdoc.m417z.com/system_performance_information
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_PERFORMANCE_INFORMATION,
+ *     SystemPerformanceInformation* sys_perf_info,
+ *     ...
+ * );
+ */
+struct SystemPerformanceInformation {
+	u64 idle_process_time;
+	u64 io_read_transfer_count;
+	u64 io_write_transfer_count;
+	u64 io_other_transfer_count;
+	u32 io_read_operation_count;
+	u32 io_write_operation_count;
+	u32 io_other_operation_count;
+	u32 available_pages;
+	u32 committed_pages;
+	u32 commit_limit;
+	u32 peak_commitment;
+	u32 page_fault_count;
+	u32 copy_on_write_count;
+	u32 transition_count;
+	u32 cache_transition_count;
+	u32 demand_zero_count;
+	u32 page_read_count;
+	u32 page_read_io_count;
+	u32 cache_read_count;
+	u32 cache_io_count;
+	u32 dirty_pages_write_count;
+	u32 dirty_write_io_count;
+	u32 mapped_pages_write_count;
+	u32 mapped_write_io_count;
+	u32 paged_pool_pages;
+	u32 non_paged_pool_pages;
+	u32 paged_pool_allocs;
+	u32 paged_pool_frees;
+	u32 non_paged_pool_allocs;
+	u32 non_paged_pool_frees;
+	u32 free_system_ptes;
+	u32 resident_system_code_page;
+	u32 total_system_driver_pages;
+	u32 total_system_code_pages;
+	u32 non_paged_pool_lookaside_hits;
+	u32 paged_pool_lookaside_hits;
+	u32 available_paged_pool_pages;
+	u32 resident_system_cache_page;
+	u32 resident_paged_pool_page;
+	u32 resident_system_driver_page;
+	u32 cc_fast_read_no_wait;
+	u32 cc_fast_read_wait;
+	u32 cc_fast_read_resource_miss;
+	u32 cc_fast_read_not_possible;
+	u32 cc_fast_mdl_read_no_wait;
+	u32 cc_fast_mdl_read_wait;
+	u32 cc_fast_mdl_read_resource_miss;
+	u32 cc_fast_mdl_read_not_possible;
+	u32 cc_map_data_no_wait;
+	u32 cc_map_data_wait;
+	u32 cc_map_data_no_wait_miss;
+	u32 cc_map_data_wait_miss;
+	u32 cc_pin_mapped_data_count;
+	u32 cc_pin_read_no_wait;
+	u32 cc_pin_read_wait;
+	u32 cc_pin_read_no_wait_miss;
+	u32 cc_pin_read_wait_miss;
+	u32 cc_copy_read_no_wait;
+	u32 cc_copy_read_wait;
+	u32 cc_copy_read_no_wait_miss;
+	u32 cc_copy_read_wait_miss;
+	u32 cc_mdl_read_no_wait;
+	u32 cc_mdl_read_wait;
+	u32 cc_mdl_read_no_wait_miss;
+	u32 cc_mdl_read_wait_miss;
+	u32 cc_read_ahead_ios;
+	u32 cc_lazy_write_ios;
+	u32 cc_lazy_write_pages;
+	u32 cc_data_flushes;
+	u32 cc_data_pages;
+	u32 context_switches;
+	u32 first_level_tb_fills;
+	u32 second_level_tb_fills;
+	u32 system_calls;
+	u64 cc_total_dirty_pages;
+	u64 cc_dirty_page_threshold;
+	s64 resident_available_pages;
+	u64 shared_committed_pages;
 };
 
 /**
@@ -364,6 +497,14 @@ DLLIMPORT Handle WINAPI CreateThread(
  */
 DLLIMPORT void WINAPI Sleep(
 	u32 milliseconds
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreaddescription
+ */
+DLLIMPORT s64 WINAPI SetThreadDescription(
+	Handle   thread,
+	wchar_t* thread_description
 );
 
 #define PAGE_NOACCESS                   0x00000001
@@ -433,6 +574,13 @@ DLLIMPORT b32 WINAPI VirtualFree(
 	void* address,
 	u64   size,
 	u32   free_type
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-outputdebugstringa
+ */
+DLLIMPORT void WINAPI OutputDebugStringA(
+	CString output_string
 );
 
 /**
