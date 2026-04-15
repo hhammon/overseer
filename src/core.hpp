@@ -151,7 +151,7 @@ raddbg_exe_data u8 view_type_view[] = "type_view: {type: ```View<?>```, expr: ``
 
 #define debug_log(fmt, ...) do {                        \
 	scratch_begin();                                    \
-	StringZ msg = scratch_sprintf(fmt, __VA_ARGS__); \
+	StringZ msg = scratch_sprintf(fmt "\n", __VA_ARGS__); \
 	scratch_end();                                      \
 	OutputDebugStringA(msg.ptr);                        \
 } while (0);

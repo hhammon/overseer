@@ -47,10 +47,13 @@ typedef s32 HResult;
  */
 
 // NOTE(hhammon) @NtStatus If the value in NtStatus ever becomes relevant, locate it here:
-#include <ntstatus.h>
+// #include <ntstatus.h>
+
+#define NT_STATUS_INFO_LENGTH_MISMATCH ((NtStatus)0xc0000004)
 
 /**
  * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi/system_information_class.htm
+ * https://ntdoc.m417z.com/system_information_class
  */
 enum SysInfoClass {
 	SysInfoClass_SYSTEM_BASIC_INFORMATION                                    = 0x00, //all
@@ -270,6 +273,130 @@ enum SysInfoClass {
 };
 
 /**
+ * https://ntdoc.m417z.com/processinfoclass
+ */
+enum ProcInfoClass {
+	ProcInfoClass_PROCESS_BASIC_INFORMATION,
+    ProcInfoClass_PROCESS_QUOTA_LIMITS,
+    ProcInfoClass_PROCESS_IO_COUNTERS,
+    ProcInfoClass_PROCESS_VM_COUNTERS,
+    ProcInfoClass_PROCESS_TIMES,
+    ProcInfoClass_PROCESS_BASE_PRIORITY,
+    ProcInfoClass_PROCESS_RAISE_PRIORITY,
+    ProcInfoClass_PROCESS_DEBUG_PORT,
+    ProcInfoClass_PROCESS_EXCEPTION_PORT,
+    ProcInfoClass_PROCESS_ACCESS_TOKEN,
+    ProcInfoClass_PROCESS_LDT_INFORMATION,
+    ProcInfoClass_PROCESS_LDT_SIZE,
+    ProcInfoClass_PROCESS_DEFAULT_HARD_ERROR_MODE,
+    ProcInfoClass_PROCESS_IO_PORT_HANDLERS,
+    ProcInfoClass_PROCESS_POOLED_USAGE_AND_LIMITS,
+    ProcInfoClass_PROCESS_WORKING_SET_WATCH,
+    ProcInfoClass_PROCESS_USER_MODE_IOPL,
+    ProcInfoClass_PROCESS_ENABLE_ALIGNMENT_FAULT_FIXUP,
+    ProcInfoClass_PROCESS_PRIORITY_CLASS,
+    ProcInfoClass_PROCESS_WX86_INFORMATION,
+    ProcInfoClass_PROCESS_HANDLE_COUNT,
+    ProcInfoClass_PROCESS_AFFINITY_MASK,
+    ProcInfoClass_PROCESS_PRIORITY_BOOST,
+    ProcInfoClass_PROCESS_DEVICE_MAP,
+    ProcInfoClass_PROCESS_SESSION_INFORMATION,
+    ProcInfoClass_PROCESS_FOREGROUND_INFORMATION,
+    ProcInfoClass_PROCESS_WOW64_INFORMATION,
+    ProcInfoClass_PROCESS_IMAGE_FILE_NAME,
+    ProcInfoClass_PROCESS_LUID_DEVICE_MAPS_ENABLED,
+    ProcInfoClass_PROCESS_BREAK_ON_TERMINATION,
+    ProcInfoClass_PROCESS_DEBUG_OBJECT_HANDLE,
+    ProcInfoClass_PROCESS_DEBUG_FLAGS,
+    ProcInfoClass_PROCESS_HANDLE_TRACING,
+    ProcInfoClass_PROCESS_IO_PRIORITY,
+    ProcInfoClass_PROCESS_EXECUTE_FLAGS,
+    ProcInfoClass_PROCESS_TLS_INFORMATION,
+    ProcInfoClass_PROCESS_COOKIE,
+    ProcInfoClass_PROCESS_IMAGE_INFORMATION,
+    ProcInfoClass_PROCESS_CYCLE_TIME,
+    ProcInfoClass_PROCESS_PAGE_PRIORITY,
+    ProcInfoClass_PROCESS_INSTRUMENTATION_CALLBACK,
+    ProcInfoClass_PROCESS_THREAD_STACK_ALLOCATION,
+    ProcInfoClass_PROCESS_WORKING_SET_WATCH_EX,
+    ProcInfoClass_PROCESS_IMAGE_FILE_NAME_WIN32,
+    ProcInfoClass_PROCESS_IMAGE_FILE_MAPPING,
+    ProcInfoClass_PROCESS_AFFINITY_UPDATE_MODE,
+    ProcInfoClass_PROCESS_MEMORY_ALLOCATION_MODE,
+    ProcInfoClass_PROCESS_GROUP_INFORMATION,
+    ProcInfoClass_PROCESS_TOKEN_VIRTUALIZATION_ENABLED,
+    ProcInfoClass_PROCESS_CONSOLE_HOST_PROCESS,
+    ProcInfoClass_PROCESS_WINDOW_INFORMATION,
+    ProcInfoClass_PROCESS_HANDLE_INFORMATION,
+    ProcInfoClass_PROCESS_MITIGATION_POLICY,
+    ProcInfoClass_PROCESS_DYNAMIC_FUNCTION_TABLE_INFORMATION,
+    ProcInfoClass_PROCESS_HANDLE_CHECKING_MODE,
+    ProcInfoClass_PROCESS_KEEP_ALIVE_COUNT,
+    ProcInfoClass_PROCESS_REVOKE_FILE_HANDLES,
+    ProcInfoClass_PROCESS_WORKING_SET_CONTROL,
+    ProcInfoClass_PROCESS_HANDLE_TABLE,
+    ProcInfoClass_PROCESS_CHECK_STACK_EXTENTS_MODE,
+    ProcInfoClass_PROCESS_COMMAND_LINE_INFORMATION,
+    ProcInfoClass_PROCESS_PROTECTION_INFORMATION,
+    ProcInfoClass_PROCESS_MEMORY_EXHAUSTION,
+    ProcInfoClass_PROCESS_FAULT_INFORMATION,
+    ProcInfoClass_PROCESS_TELEMETRY_ID_INFORMATION,
+    ProcInfoClass_PROCESS_COMMIT_RELEASE_INFORMATION,
+    ProcInfoClass_PROCESS_DEFAULT_CPU_SETS_INFORMATION,
+    ProcInfoClass_PROCESS_ALLOWED_CPU_SETS_INFORMATION,
+    ProcInfoClass_PROCESS_SUBSYSTEM_PROCESS,
+    ProcInfoClass_PROCESS_JOB_MEMORY_INFORMATION,
+    ProcInfoClass_PROCESS_IN_PRIVATE,
+    ProcInfoClass_PROCESS_RAISE_UM_EXCEPTION_ON_INVALID_HANDLE_CLOSE,
+    ProcInfoClass_PROCESS_IUM_CHALLENGE_RESPONSE,
+    ProcInfoClass_PROCESS_CHILD_PROCESS_INFORMATION,
+    ProcInfoClass_PROCESS_HIGH_GRAPHICS_PRIORITY_INFORMATION,
+    ProcInfoClass_PROCESS_SUBSYSTEM_INFORMATION,
+    ProcInfoClass_PROCESS_ENERGY_VALUES,
+    ProcInfoClass_PROCESS_POWER_THROTTLING_STATE,
+    ProcInfoClass_PROCESS_ACTIVITY_THROTTLE_POLICY,
+    ProcInfoClass_PROCESS_WIN32K_SYSCALL_FILTER_INFORMATION,
+    ProcInfoClass_PROCESS_DISABLE_SYSTEM_ALLOWED_CPU_SETS,
+    ProcInfoClass_PROCESS_WAKE_INFORMATION,
+    ProcInfoClass_PROCESS_ENERGY_TRACKING_STATE,
+    ProcInfoClass_PROCESS_MANAGE_WRITES_TO_EXECUTABLE_MEMORY,
+    ProcInfoClass_PROCESS_CAPTURE_TRUSTLET_LIVE_DUMP,
+    ProcInfoClass_PROCESS_TELEMETRY_COVERAGE,
+    ProcInfoClass_PROCESS_ENCLAVE_INFORMATION,
+    ProcInfoClass_PROCESS_ENABLE_READ_WRITE_VM_LOGGING,
+    ProcInfoClass_PROCESS_UPTIME_INFORMATION,
+    ProcInfoClass_PROCESS_IMAGE_SECTION,
+    ProcInfoClass_PROCESS_DEBUG_AUTH_INFORMATION,
+    ProcInfoClass_PROCESS_SYSTEM_RESOURCE_MANAGEMENT,
+    ProcInfoClass_PROCESS_SEQUENCE_NUMBER,
+    ProcInfoClass_PROCESS_LOADER_DETOUR,
+    ProcInfoClass_PROCESS_SECURITY_DOMAIN_INFORMATION,
+    ProcInfoClass_PROCESS_COMBINE_SECURITY_DOMAINS_INFORMATION,
+    ProcInfoClass_PROCESS_ENABLE_LOGGING,
+    ProcInfoClass_PROCESS_LEAP_SECOND_INFORMATION,
+    ProcInfoClass_PROCESS_FIBER_SHADOW_STACK_ALLOCATION,
+    ProcInfoClass_PROCESS_FREE_FIBER_SHADOW_STACK_ALLOCATION,
+    ProcInfoClass_PROCESS_ALT_SYSTEM_CALL_INFORMATION,
+    ProcInfoClass_PROCESS_DYNAMIC_EH_CONTINUATION_TARGETS,
+    ProcInfoClass_PROCESS_DYNAMIC_ENFORCED_CET_COMPATIBLE_RANGES,
+    ProcInfoClass_PROCESS_CREATE_STATE_CHANGE,
+    ProcInfoClass_PROCESS_APPLY_STATE_CHANGE,
+    ProcInfoClass_PROCESS_ENABLE_OPTIONAL_X_STATE_FEATURES,
+    ProcInfoClass_PROCESS_ALT_PREFETCH_PARAM,
+    ProcInfoClass_PROCESS_ASSIGN_CPU_PARTITIONS,
+    ProcInfoClass_PROCESS_PRIORITY_CLASS_EX,
+    ProcInfoClass_PROCESS_MEMBERSHIP_INFORMATION,
+    ProcInfoClass_PROCESS_EFFECTIVE_IO_PRIORITY,
+    ProcInfoClass_PROCESS_EFFECTIVE_PAGE_PRIORITY,
+    ProcInfoClass_PROCESS_SCHEDULER_SHARED_DATA,
+    ProcInfoClass_PROCESS_SLIST_ROLLBACK_INFORMATION,
+    ProcInfoClass_PROCESS_NETWORK_IO_COUNTERS,
+    ProcInfoClass_PROCESS_FIND_FIRST_THREAD_BY_TEB_VALUE,
+    ProcInfoClass_PROCESS_ENCLAVE_ADDRESS_SPACE_RESTRICTION,
+    ProcInfoClass_PROCESS_AVAILABLE_CPUS
+};
+
+/**
  * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntquerysysteminformation
  */
 DLLIMPORT NtStatus NTAPI NtQuerySystemInformation(
@@ -277,6 +404,18 @@ DLLIMPORT NtStatus NTAPI NtQuerySystemInformation(
 	void*        sys_info,
 	u32          sys_info_length,
 	u32*         return_length
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess
+ */
+
+DLLIMPORT NtStatus NTAPI NtQueryInformationProcess(
+	Handle process_handle,
+	ProcInfoClass proc_info_class,
+	void*         proc_info,
+	u32           proc_info_length,
+	u32*          return_length
 );
 
 /**
@@ -456,6 +595,83 @@ struct SystemPerformanceInformation {
 	u64 cc_dirty_page_threshold;
 	s64 resident_available_pages;
 	u64 shared_committed_pages;
+};
+
+/**
+ * https://ntdoc.m417z.com/client_id
+ */
+struct ClientId {
+	Handle unique_process;
+	Handle unique_thread;
+};
+
+/**
+ * https://ntdoc.m417z.com/system_thread_information
+ */
+struct SystemThreadInformation {
+	u64      kernel_time;
+	u64      user_time;
+	u64      create_time;
+	u32      wait_time;
+	void*    start_address;
+	ClientId client_id;
+	s32      priority;
+	s32      base_priority;
+	u32      context_switches;
+	u32      thread_state;
+	u32      wait_reason;
+};
+
+/**
+ * https://ntdoc.m417z.com/system_process_information
+ *
+ * NtQuerySystemInformation(
+ *     SysInfoClass_SYSTEM_PROCESS_INFORMATION,
+ *     SystemProcessInformation* buffer,
+ *     ...
+ * );
+ *
+ * This one's tricky because of variable sizing due to threads and ever-changing data. Call first with a NULL buffer
+ * and loop with a growing buffer until the status returned is not NT_STATUS_INFO_LENGTH_MISMATCH. The return_size
+ * will indicate the size the new buffer should be. Then, use as a linked list with `next_entry_offset` to index the
+ * next process in the buffer.
+ */
+struct SystemProcessInformation {
+	u32                     next_entry_offset;
+	u32                     number_of_threads;
+	u64                     working_set_private_size;
+	u32                     hard_fault_count;
+	u32                     number_of_threads_high_watermark;
+	u64                     cycle_time;
+	u64                     create_time;
+	u64                     user_time;
+	u64                     kernel_time;
+	UnicodeString           image_name;
+	s32                     base_priority;
+	Handle                  unique_process_id;
+	Handle                  inherited_from_unique_process_id;
+	u32                     handle_count;
+	u32                     session_id;
+	uptr                    unique_process_key;
+	u64                     peak_virtual_size;
+	u64                     virtual_size;
+	u32                     page_fault_count;
+	u64                     peak_working_set_size;
+	u64                     working_set_size;
+	u64                     quota_peak_paged_pool_usage;
+	u64                     quota_paged_pool_usage;
+	u64                     quota_peak_non_paged_pool_usage;
+	u64                     quota_non_paged_pool_usage;
+	u64                     pagefile_usage;
+	u64                     peak_pagefile_usage;
+	u64                     private_page_count;
+	u64                     read_operation_count;
+	u64                     write_operation_count;
+	u64                     other_operation_count;
+	u64                     read_transfer_count;
+	u64                     write_transfer_count;
+	u64                     other_transfer_count;
+	SystemThreadInformation threads[];
 };
 
 /**
@@ -1144,6 +1360,24 @@ DLLIMPORT s64 WINAPI DefWindowProcW(
 	u32  msg,
 	u64  w_param,
 	s64  l_param
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/gdi/colorref
+ */
+typedef u32 ColorRef;
+
+#define win32_rgb(r, g, b) ((ColorRef)( \
+	(((u32)r & 0xff) <<  0) |           \
+	(((u32)g & 0xff) <<  8) |           \
+	(((u32)b & 0xff) << 16)             \
+))
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-createsolidbrush
+ */
+DLLIMPORT HBrush WINAPI CreateSolidBrush(
+	ColorRef color
 );
 
 /**

@@ -188,6 +188,58 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			}
 		}
 
+		{
+			// Processes... Is this the place to do it?
+
+			SystemProcessInformation* proc_info      = NULL;
+			u32                       proc_info_size = 0;
+
+			scratch_begin();
+
+			for (;;) {
+				NtStatus proc_info_status = NtQuerySystemInformation(
+					SysInfoClass_SYSTEM_PROCESS_INFORMATION,
+					proc_info,
+					proc_info_size,
+					&proc_info_size
+				);
+
+				if (proc_info_status == NT_STATUS_INFO_LENGTH_MISMATCH) {
+					scratch_end();
+					scratch_begin();
+
+					proc_info = (SystemProcessInformation*)arena_alloc_item(
+						&scratch_arena,
+						alignof(SystemProcessInformation),
+						proc_info_size
+					);
+
+					if (!proc_info) {
+						break;
+					}
+				} else {
+					break;
+				}
+			}
+
+			u32 thread_count = 0;
+			u32 handle_count = 0;
+			for (;;) {
+				thread_count += proc_info->number_of_threads;
+				handle_count += proc_info->handle_count;
+
+				if (!proc_info->next_entry_offset) {
+					break;
+				}
+
+				proc_info = (SystemProcessInformation*)((u8*)proc_info + proc_info->next_entry_offset);
+			}
+
+			debug_log("Threads: %u, Handles: %u", thread_count, handle_count);
+
+			scratch_end();
+		}
+
 		poll_count++;
 
 		// TODO(hhammon) Do actual timing
