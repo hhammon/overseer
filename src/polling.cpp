@@ -3,17 +3,26 @@
 #include "arena.hpp"
 #include "windows.hpp"
 
+#include <unordered_map>
+
 global bool polling_running = false;
 
 // Circular buffer that grows to a maximum
-global CpuPercents cpu_history[300 + 1];
+global CpuPercents cpu_history[POLLING_HISTORY_LENGTH];
 global u64         cpu_history_start = 0;
 global u64         cpu_history_count = 0;
 
 // Circular buffer that grows to a maximum
-global MemoryPercents memory_history[300 + 1];
+global MemoryPercents memory_history[POLLING_HISTORY_LENGTH];
 global u64            memory_history_start = 0;
 global u64            memory_history_count = 0;
+
+// Doubly-linked list of all processes
+global ProcessData* processes_head    = NULL;
+global ProcessData* processes_tail    = NULL;
+global u32          process_count     = 0;
+global ProcessData* process_free_list = NULL;
+global ThreadData*  thread_free_list  = NULL;
 
 internal u32 WINCALLBACK polling_thread(void* param);
 
@@ -29,7 +38,7 @@ api_method void polling_end() {
 	polling_running = false;
 }
 
-api_method CpuHistoryCircularBuffer polling_get_cpu_history() {
+api_method CpuHistory polling_get_cpu_history() {
 	f64 last_time = 0.0;
 	if (cpu_history_count) {
 		if (cpu_history_count < arrlen(cpu_history)) {
@@ -42,7 +51,7 @@ api_method CpuHistoryCircularBuffer polling_get_cpu_history() {
 			}
 		}
 	}
-	return (CpuHistoryCircularBuffer) {
+	return (CpuHistory) {
 		.base   = cpu_history,
 		.length = cpu_history_count,
 		.offset = cpu_history_start,
@@ -51,7 +60,7 @@ api_method CpuHistoryCircularBuffer polling_get_cpu_history() {
 	};
 }
 
-api_method MemoryHistoryCircularBuffer polling_get_memory_history() {
+api_method MemoryHistory polling_get_memory_history() {
 	f64 last_time = 0.0;
 	if (memory_history_count) {
 		if (memory_history_count < arrlen(memory_history)) {
@@ -64,7 +73,7 @@ api_method MemoryHistoryCircularBuffer polling_get_memory_history() {
 			}
 		}
 	}
-	return (MemoryHistoryCircularBuffer) {
+	return (MemoryHistory) {
 		.base   = memory_history,
 		.length = memory_history_count,
 		.offset = memory_history_start,
@@ -77,6 +86,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 	unused_var(param);
 
 	scratch_init();
+	Arena arena = arena_create(1 * GIGABYTE);
 
 	SystemBasicInformation sys_basic_info = { };
 	u32 basic_info_return_size;
@@ -222,11 +232,16 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				}
 			}
 
-			u32 thread_count = 0;
-			u32 handle_count = 0;
+			u64 system_time;
+			GetSystemTimeAsFileTime(&system_time);
+
+			u32 thread_count     = 0;
+			u32 handle_count     = 0;
+			u64 hard_fault_count = 0;
 			for (;;) {
-				thread_count += proc_info->number_of_threads;
-				handle_count += proc_info->handle_count;
+				thread_count     += proc_info->number_of_threads;
+				handle_count     += proc_info->handle_count;
+				hard_fault_count += proc_info->hard_fault_count;
 
 				if (!proc_info->next_entry_offset) {
 					break;
@@ -235,7 +250,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				proc_info = (SystemProcessInformation*)((u8*)proc_info + proc_info->next_entry_offset);
 			}
 
-			debug_log("Threads: %u, Handles: %u", thread_count, handle_count);
+			debug_log("Threads: %u, Handles: %u, Hard Faults: %llu", thread_count, handle_count, hard_fault_count);
 
 			scratch_end();
 		}
@@ -246,6 +261,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 		Sleep(1000);
 	}
 
+	arena_destroy(&arena);
 	scratch_destroy();
 	return 0;
 }

@@ -51,9 +51,9 @@ internal void do_ui() {
 	);
 
 	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
-		CpuHistoryCircularBuffer cpu_history = polling_get_cpu_history();
-		CpuPercents* base   = cpu_history.base;
-		u64          length = cpu_history.length;
+		CpuHistory   cpu_history = polling_get_cpu_history();
+		CpuPercents* base        = cpu_history.base;
+		u64          length      = cpu_history.length;
 
 		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
 		ImPlot::SetupAxisLimits(ImAxis_X1, cpu_history.start, cpu_history.end, ImGuiCond_Always);
@@ -75,9 +75,9 @@ internal void do_ui() {
 	}
 
 	if (ImPlot::BeginPlot("Memory Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
-		MemoryHistoryCircularBuffer memory_history = polling_get_memory_history();
-		MemoryPercents* base =   memory_history.base;
-		u64             length = memory_history.length;
+		MemoryHistory   memory_history = polling_get_memory_history();
+		MemoryPercents* base           = memory_history.base;
+		u64             length         = memory_history.length;
 
 		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
 		ImPlot::SetupAxisLimits(ImAxis_X1, memory_history.start, memory_history.end, ImGuiCond_Always);

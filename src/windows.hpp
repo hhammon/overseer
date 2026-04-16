@@ -411,11 +411,18 @@ DLLIMPORT NtStatus NTAPI NtQuerySystemInformation(
  */
 
 DLLIMPORT NtStatus NTAPI NtQueryInformationProcess(
-	Handle process_handle,
+	Handle        process_handle,
 	ProcInfoClass proc_info_class,
 	void*         proc_info,
 	u32           proc_info_length,
 	u32*          return_length
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemtimeasfiletime
+ */
+DLLIMPORT void WINAPI GetSystemTimeAsFileTime(
+	u64* system_time_as_file_time
 );
 
 /**
@@ -601,8 +608,8 @@ struct SystemPerformanceInformation {
  * https://ntdoc.m417z.com/client_id
  */
 struct ClientId {
-	Handle unique_process;
-	Handle unique_thread;
+	uptr unique_process;
+	uptr unique_thread;
 };
 
 /**
@@ -648,8 +655,8 @@ struct SystemProcessInformation {
 	u64                     kernel_time;
 	UnicodeString           image_name;
 	s32                     base_priority;
-	Handle                  unique_process_id;
-	Handle                  inherited_from_unique_process_id;
+	uptr                    unique_process_id;
+	uptr                    inherited_from_unique_process_id;
 	u32                     handle_count;
 	u32                     session_id;
 	uptr                    unique_process_key;
@@ -797,6 +804,20 @@ DLLIMPORT b32 WINAPI VirtualFree(
  */
 DLLIMPORT void WINAPI OutputDebugStringA(
 	CString output_string
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte
+ */
+DLLIMPORT s32 WINAPI WideCharToMultiByte(
+	u32      code_page,
+	u32      flags,
+	wchar_t* wide_char_str,
+	s32      wide_char,
+	u8*      multi_byte_str,
+	s32      multi_byte,
+	u8*      default_char,
+	b32*     used_default_char
 );
 
 /**
