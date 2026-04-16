@@ -6,10 +6,5 @@ recent_file: path: "src/arena.cpp"
 debug_info:
 {
   path: "C:/Users/Hyrum Hammon/handmade/overseer/build/overseer.pdb"
-  timestamp: 66212137168942
-}
-breakpoint:
-{
-  source_location: "src/polling.cpp:233:1"
-  hit_count: 221
+  timestamp: 66212167222191
 }

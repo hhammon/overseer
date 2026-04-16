@@ -107,6 +107,7 @@ struct ProcessData {
 	u64            image_name_len;
 	u8             image_name[256];
 	ProcessHistory history;
+	b8             touched; // Internal flag
 };
 
 const int x = sizeof(ProcessData);

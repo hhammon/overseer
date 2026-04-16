@@ -38,7 +38,6 @@ typedef s64      sprocptr;
 #define internal      static
 #define global        static
 #define local_persist static
-#define thread_local  static __thread
 
 #define no_mangle extern "C"
 
