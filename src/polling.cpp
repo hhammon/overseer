@@ -342,6 +342,22 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				process->commit           = proc_info->private_page_count;
 				process->hard_fault_count = proc_info->hard_fault_count;
 
+				if (!init_process) {
+					// We have a previous tick for an interval
+					u64 user_diff        = proc_info->user_time   - process->user_cpu_last;
+					u64 kernel_diff      = proc_info->kernel_time - process->kernel_cpu_last;
+					u64 system_time_diff = system_time            - process->system_time_last;
+					u64 cpu_diff         = user_diff + kernel_diff;
+					u64 cpu_total        = system_time_diff * sys_basic_info.number_of_processors;
+					process->cpu_pct     = ((f64)cpu_diff / cpu_total) * 100;
+				} else {
+					process->cpu_pct = 0.0;
+				}
+
+				process->system_time_last = system_time;
+				process->user_cpu_last    = proc_info->user_time;
+				process->kernel_cpu_last  = proc_info->kernel_time;
+
 				for (u32 thread_idx = 0; thread_idx < proc_info->number_of_threads; thread_idx++) {
 					SystemThreadInformation* thread_info = &proc_info->threads[thread_idx];
 

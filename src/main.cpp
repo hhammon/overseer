@@ -128,6 +128,7 @@ internal void tab_performance() {
 enum ProcessTableColumn {
 	ProcessTableColumn_NAME,
 	ProcessTableColumn_PID,
+	ProcessTableColumn_CPU,
 	ProcessTableColumn_RAM,
 	ProcessTableColumn_COMMIT,
 	ProcessTableColumn_UP_TIME,
@@ -165,6 +166,13 @@ internal int __cdecl proc_cmp_pid_asc(ProcessData** a, ProcessData** b) {
 }
 internal int __cdecl proc_cmp_pid_desc(ProcessData** a, ProcessData** b) {
 	return -cmp_u64((*a)->pid, (*b)->pid);
+}
+
+internal int __cdecl proc_cmp_cpu_asc(ProcessData** a, ProcessData** b) {
+	return cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
+}
+internal int __cdecl proc_cmp_cpu_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
 }
 
 internal int __cdecl proc_cmp_ram_asc(ProcessData** a, ProcessData** b) {
@@ -253,6 +261,7 @@ internal void tab_processes() {
 	CString column_names[ProcessTableColumn__COUNT] = {
 		"Name",
 		"PID",
+		"CPU",
 		"RAM",
 		"Commit",
 		"Up Time",
@@ -267,6 +276,7 @@ internal void tab_processes() {
 	int (__cdecl* process_comparers_asc[ProcessTableColumn__COUNT])(const void*, const void*) = {
 		(int (__cdecl*)(const void*, const void*))proc_cmp_image_name_asc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_pid_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_cpu_asc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_ram_asc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_commit_asc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_uptime_asc,
@@ -281,6 +291,7 @@ internal void tab_processes() {
 	int (__cdecl* process_comparers_desc[ProcessTableColumn__COUNT])(const void*, const void*) = {
 		(int (__cdecl*)(const void*, const void*))proc_cmp_image_name_desc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_pid_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_cpu_desc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_ram_desc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_commit_desc,
 		(int (__cdecl*)(const void*, const void*))proc_cmp_uptime_desc,
@@ -302,15 +313,24 @@ internal void tab_processes() {
 		ImGuiTableFlags_BordersOuter           |
 		ImGuiTableFlags_BordersV               |
 		ImGuiTableFlags_SizingFixedFit         |
+		ImGuiTableFlags_ScrollX                |
 		ImGuiTableFlags_ScrollY                |
 		ImGuiTableFlags_HighlightHoveredColumn |
 		ImGuiTableFlags_Sortable               |
 		0
 	)) {
 		for (u32 col_idx = 0; col_idx < ProcessTableColumn__COUNT; col_idx++) {
-			ImGui::TableSetupColumn(column_names[col_idx], 0);
+			ImGui::TableSetupColumn(
+				column_names[col_idx],
+				(
+					col_idx == ProcessTableColumn_NAME ||
+					col_idx == ProcessTableColumn_PID
+				 ) ?
+				 ImGuiTableColumnFlags_PreferSortAscending :
+				 ImGuiTableColumnFlags_PreferSortDescending
+			);
 		}
-		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupScrollFreeze(1, 1);
 		ImGui::TableHeadersRow();
 
 		if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
@@ -342,13 +362,34 @@ internal void tab_processes() {
 					ImGui::TableSetColumnIndex(col_idx);
 					switch (col_idx) {
 					case ProcessTableColumn_NAME: {
-						imgui_string((String){
-							.ptr = process->image_name,
-							.len = process->image_name_len
-						});
+						// TODO(hhammon) This really is a terribly way to do this for a lot of reasons.
+						local_persist s64 selected_pid = -1;
+						if (ImGui::Selectable(
+							scratch_sprintf("%s##%llu", process->image_name, process->pid).ptr,
+							(s64)process->pid == selected_pid,
+							ImGuiSelectableFlags_SpanAllColumns   |
+							ImGuiSelectableFlags_AllowOverlap     |
+							ImGuiSelectableFlags_AllowDoubleClick |
+							0
+						)) {
+							selected_pid = process->pid;
+							debug_log("%llu selected", process->pid);
+
+							if (
+								ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) ||
+								ImGui::IsKeyDown(ImGuiKey_Enter)                   ||
+								ImGui::IsKeyDown(ImGuiKey_KeypadEnter)             ||
+								0
+							) {
+								debug_log("%llu opened", process->pid);
+							}
+						}
 					} break;
 					case ProcessTableColumn_PID: {
 						imgui_printf_right("%llu", process->pid);
+					} break;
+					case ProcessTableColumn_CPU: {
+						imgui_printf_right("%05.2lf%%", process->cpu_pct);
 					} break;
 					case ProcessTableColumn_RAM: {
 						imgui_printf_right("%_$$llu", process->ram);

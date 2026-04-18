@@ -107,13 +107,16 @@ struct ProcessData {
 	f64            user_time;
 	f64            kernel_time;
 	f64            cpu_time;
-	f64            cpu_pct_last;
+	f64            cpu_pct;
 	u64            ram;
 	u64            commit;
 	u64            hard_fault_count;
 	u64            image_name_len;
 	char           image_name[256];
 	ProcessHistory history;
+	u64            system_time_last;
+	u64            user_cpu_last;
+	u64            kernel_cpu_last;
 	b8             touched; // Internal flag
 };
 
