@@ -62,7 +62,6 @@ struct ProcessHistoryPoint {
 	f64 user;
 	f64 kernel;
 	f64 ram;
-	f64 swap;
 	f64 commit;
 };
 
@@ -74,9 +73,12 @@ struct ProcessHistory {
 	f64                 end;
 };
 
+struct ProcessData;
+
 struct ThreadData {
 	ThreadData*   prev;
 	ThreadData*   next;
+	ProcessData*  process;
 	u64           tid;
 	u64           create_time;
 	f64           uptime;
@@ -85,6 +87,13 @@ struct ThreadData {
 	f64           kernel_time;
 	f64           cpu_pct_last;
 	ThreadHistory history;
+	b8            touched; // Internal flag
+};
+
+struct ThreadList {
+	ThreadData* head;
+	ThreadData* tail;
+	u64         count;
 };
 
 struct ProcessData {
@@ -92,17 +101,14 @@ struct ProcessData {
 	ProcessData*   next;
 	u64            pid;
 	u64            create_time;
-	ThreadData*    threads_head_node;
-	u32            thread_count;
+	ThreadList     threads;
 	u32            handle_count;
 	f64            uptime;
-	f64            cpu_time;
 	f64            user_time;
 	f64            kernel_time;
+	f64            cpu_time;
 	f64            cpu_pct_last;
 	u64            ram;
-	u64            swap;
-	u64            va;
 	u64            commit;
 	u64            image_name_len;
 	u8             image_name[256];
@@ -110,8 +116,11 @@ struct ProcessData {
 	b8             touched; // Internal flag
 };
 
-const int x = sizeof(ProcessData);
-const int y = sizeof(ThreadData);
+struct ProcessList {
+	ProcessData* head;
+	ProcessData* tail;
+	u64          count;
+};
 
 api_method void polling_begin();
 api_method void polling_end();

@@ -18,9 +18,9 @@ global u64            memory_history_start = 0;
 global u64            memory_history_count = 0;
 
 // Doubly-linked list of all processes
-global ProcessData* processes_head    = NULL;
-global ProcessData* processes_tail    = NULL;
-global u32          process_count     = 0;
+global ProcessList  processes         = { };
+global u32          thread_count      = 0;
+global u32          handle_count      = 0;
 global ProcessData* process_free_list = NULL;
 global ThreadData*  thread_free_list  = NULL;
 
@@ -107,6 +107,9 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 		.ptr = cpu_stats.ptr + cpu_stats.len,
 		.len = cpu_stats.len,
 	};
+
+	std::unordered_map<u32, ProcessData*> process_map;
+	std::unordered_map<u32, ThreadData*>  thread_map;
 
 	u64 poll_count = 0;
 	while (polling_running) {
@@ -235,27 +238,231 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			u64 system_time;
 			GetSystemTimeAsFileTime(&system_time);
 
-			u32 thread_count     = 0;
-			u32 handle_count     = 0;
-			u64 hard_fault_count = 0;
+			processes.count = 0;
+			thread_count    = 0;
+			handle_count    = 0;
+			unused_var(thread_count);
+			unused_var(handle_count);
 			for (;;) {
-				thread_count     += proc_info->number_of_threads;
-				handle_count     += proc_info->handle_count;
-				hard_fault_count += proc_info->hard_fault_count;
+				processes.count++;
+				thread_count += proc_info->number_of_threads;
+				handle_count += proc_info->handle_count;
+
+				ProcessData* process = process_map[proc_info->unique_process_id];
+				bool init_process = false;
+				if (!process) {
+					init_process = true;
+
+					if (process_free_list) {
+						process = process_free_list;
+						process_free_list = process->next;
+					} else {
+						process = alloc_item(&arena, ProcessData);
+					}
+
+					process->prev = processes.tail;
+					process->next = NULL;
+					if (!processes.head) {
+						processes.head = process;
+					} else {
+						processes.tail->next = process;
+					}
+					processes.tail = process;
+
+					process_map[proc_info->unique_process_id] = process;
+				} else if (process->create_time != proc_info->create_time) {
+					init_process = true;
+
+					for (ThreadData* thread = process->threads.head; thread; thread = thread->next) {
+						if (thread_map[thread->tid] == thread) { // TID might already be reused in prior process.
+							thread_map.erase(thread->tid);
+						}
+					}
+					if (process->threads.tail) {
+						process->threads.tail->next = thread_free_list;
+						thread_free_list = process->threads.head;
+					}
+				}
+
+				if (init_process) {
+					process->pid         = proc_info->unique_process_id;
+					process->create_time = proc_info->create_time;
+					process->threads     = { };
+
+					process->image_name_len = WideCharToMultiByte(
+						CP_UTF8, 0,
+						proc_info->image_name.buffer, proc_info->image_name.length / sizeof(wchar_t),
+						process->image_name, sizeof(process->image_name) - 1,
+						NULL, NULL
+					);
+					process->image_name[process->image_name_len] = 0;
+
+					process->history.offset = 0;
+					process->history.length  = 0;
+
+					debug_log(
+						"[CREATED PROCESS] Process: %s (%d)",
+						process->image_name, process->pid
+					);
+				}
+
+				process->threads.count = proc_info->number_of_threads;
+				process->handle_count  = proc_info->handle_count;
+
+				const f64 ticks_per_second = 10'000'000;
+				process->uptime      = (f64)(proc_info->create_time - system_time)          / ticks_per_second;
+				process->user_time   = (f64)(proc_info->user_time)                          / ticks_per_second;
+				process->kernel_time = (f64)(proc_info->kernel_time)                        / ticks_per_second;
+				process->cpu_time    = (f64)(proc_info->user_time + proc_info->kernel_time) / ticks_per_second;
+
+				process->ram         = proc_info->working_set_private_size;
+				process->commit      = proc_info->private_page_count;
+
+				for (u32 thread_idx = 0; thread_idx < proc_info->number_of_threads; thread_idx++) {
+					SystemThreadInformation* thread_info = &proc_info->threads[thread_idx];
+
+					ThreadData* thread = thread_map[thread_info->client_id.unique_thread];
+					bool init_thread = false;
+					if (!thread) {
+						init_thread = true;
+
+						if (thread_free_list) {
+							thread = thread_free_list;
+							thread_free_list = thread->next;
+						} else {
+							thread = alloc_item(&arena, ThreadData);
+						}
+
+						thread_map[thread_info->client_id.unique_thread] = thread;
+					} else if (
+						thread->create_time  != thread_info->create_time &&
+						thread->process->pid != thread_info->client_id.unique_process
+					) {
+						init_thread = true;
+					}
+
+					if (init_thread) {
+						thread->prev = process->threads.tail;
+						thread->next = NULL;
+						if (!process->threads.head) {
+							process->threads.head = thread;
+						} else {
+							process->threads.tail->next = thread;
+						}
+						process->threads.tail = thread;
+
+						thread->process     = process;
+						thread->tid         = thread_info->client_id.unique_thread;
+						thread->create_time = thread_info->create_time;
+
+						thread->history.offset = 0;
+						thread->history.length = 0;
+
+						debug_log(
+							"[CREATED THREAD] Process: %s (%d), Thread: %d",
+							thread->process->image_name, thread->process->pid, thread->tid
+						);
+					}
+
+					thread->uptime      = (f64)(thread_info->create_time - system_time)            / ticks_per_second;
+					thread->user_time   = (f64)(thread_info->user_time)                            / ticks_per_second;
+					thread->kernel_time = (f64)(thread_info->kernel_time)                          / ticks_per_second;
+					thread->cpu_time    = (f64)(thread_info->user_time + thread_info->kernel_time) / ticks_per_second;
+
+					thread->touched = true;
+				}
+
+				process->touched = true;
 
 				if (!proc_info->next_entry_offset) {
 					break;
 				}
-
 				proc_info = (SystemProcessInformation*)((u8*)proc_info + proc_info->next_entry_offset);
 			}
 
-			debug_log("Threads: %u, Handles: %u, Hard Faults: %llu", thread_count, handle_count, hard_fault_count);
+			// Remove everything untouched
+			ProcessData* process = processes.head;
+			while (process) {
+				ProcessData* next_process = process->next;
+
+				ThreadData* thread = process->threads.head;
+				while (thread) {
+					ThreadData* next_thread = thread->next;
+
+					if (!thread->touched) {
+						thread_map.erase(thread->tid);
+
+						if (thread->prev) {
+							thread->prev->next = thread->next;
+						} else {
+							process->threads.head = thread->next;
+						}
+
+						if (thread->next) {
+							thread->next->prev = thread->prev;
+						} else {
+							process->threads.tail = thread->prev;
+						}
+
+						thread->next     = thread_free_list;
+						thread_free_list = thread;
+
+						if (process->touched) {
+							debug_log(
+								"[REMOVED THREAD] Process: %s (%d), Thread: %d",
+								thread->process->image_name, thread->process->pid, thread->tid
+							);
+						}
+					}
+
+					thread->touched = false;
+					thread = next_thread;
+				}
+
+				if (!process->touched) {
+					process_map.erase(process->pid);
+
+					if (process->prev) {
+						process->prev->next = process->next;
+					} else {
+						processes.head = process->next;
+					}
+
+					if (process->next) {
+						process->next->prev = process->prev;
+					} else {
+						processes.tail = process->prev;
+					}
+
+					process->next     = process_free_list;
+					process_free_list = process;
+
+					debug_log(
+						"[REMOVED PROCESS] Process: %s (%d)",
+						process->image_name, process->pid
+					);
+				}
+
+				process->touched = false;
+				process = next_process;
+			}
 
 			scratch_end();
 		}
 
 		poll_count++;
+
+
+		u32 proc_free_count   = 0;
+		u32 thread_free_count = 0;
+		for (auto proc = process_free_list; proc; proc = proc->next) proc_free_count++;
+		for (auto thread = thread_free_list; thread; thread = thread->next) thread_free_count++;
+
+		debug_log("Processes:         %d", processes.count);
+		debug_log("Threads:           %d", thread_count);
+		debug_log("Process Free List: %d", proc_free_count);
+		debug_log("Thread Free List:  %d", thread_free_count);
+		debug_log("Arena Usage:       %$$lu", arena.used);
 
 		// TODO(hhammon) Do actual timing
 		Sleep(1000);

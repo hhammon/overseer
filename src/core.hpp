@@ -133,9 +133,9 @@ raddbg_exe_data u8 view_type_view[] = "type_view: {type: ```View<?>```, expr: ``
 #define clamp(l, val, h) (max(l, min(val, h)))
 
 #define swap_vars(a, b) do { \
-	auto temp = a;      \
-	a = b;              \
-	b = temp;           \
+	auto temp = a;           \
+	a = b;                   \
+	b = temp;                \
 } while (0)
 
 #if BUILD_DEBUG
@@ -148,11 +148,11 @@ raddbg_exe_data u8 view_type_view[] = "type_view: {type: ```View<?>```, expr: ``
 
 #define debug_only if (1)
 
-#define debug_log(fmt, ...) do {                        \
-	scratch_begin();                                    \
+#define debug_log(fmt, ...) do {                          \
+	scratch_begin();                                      \
 	StringZ msg = scratch_sprintf(fmt "\n", __VA_ARGS__); \
-	scratch_end();                                      \
-	OutputDebugStringA(msg.ptr);                        \
+	scratch_end();                                        \
+	OutputDebugStringA(msg.ptr);                          \
 } while (0);
 
 #else

@@ -806,6 +806,14 @@ DLLIMPORT void WINAPI OutputDebugStringA(
 	CString output_string
 );
 
+#define CP_ACP        0
+#define CP_OEMCP      1
+#define CP_MACCP      2
+#define CP_THREAD_ACP 3
+#define CP_SYMBOL     42
+#define CP_UTF7       65000
+#define CP_UTF8       65001
+
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte
  */
