@@ -99,7 +99,7 @@ typedef View<char> String;
 typedef String   StringZ; // Guaranteed to be null-terminated
 
 #define S(literal) ((StringZ) { \
-	.ptr = (u8*)(literal),      \
+	.ptr = (char*)(literal),    \
 	.len = sizeof(literal) - 1  \
 })
 

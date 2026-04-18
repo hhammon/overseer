@@ -102,7 +102,7 @@ struct ProcessData {
 	u64            pid;
 	u64            create_time;
 	ThreadList     threads;
-	u32            handle_count;
+	u64            handle_count;
 	f64            uptime;
 	f64            user_time;
 	f64            kernel_time;
@@ -110,8 +110,9 @@ struct ProcessData {
 	f64            cpu_pct_last;
 	u64            ram;
 	u64            commit;
+	u64            hard_fault_count;
 	u64            image_name_len;
-	u8             image_name[256];
+	char           image_name[256];
 	ProcessHistory history;
 	b8             touched; // Internal flag
 };
@@ -124,8 +125,11 @@ struct ProcessList {
 
 api_method void polling_begin();
 api_method void polling_end();
+api_method bool polling_check_for_changes();
 
 api_method CpuHistory    polling_get_cpu_history();
 api_method MemoryHistory polling_get_memory_history();
+
+api_method View<ProcessData*> polling_collect_processes(Arena* arena);
 
 #endif // __POLLING_HPP__

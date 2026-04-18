@@ -822,9 +822,9 @@ DLLIMPORT s32 WINAPI WideCharToMultiByte(
 	u32      flags,
 	wchar_t* wide_char_str,
 	s32      wide_char,
-	u8*      multi_byte_str,
+	char*    multi_byte_str,
 	s32      multi_byte,
-	u8*      default_char,
+	char*    default_char,
 	b32*     used_default_char
 );
 

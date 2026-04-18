@@ -24,6 +24,7 @@ set WARNINGS=-Wall -Wextra -Werror -Wno-unused-function -Wno-switch -Wno-gnu-ali
 -Wno-missing-declarations -Wno-missing-field-initializers
 
 clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O0 -g -DBUILD_DEBUG=1 %WARNINGS%
+@REM clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O3 -DBUILD_DEBUG=0 %WARNINGS%
 link /nologo /OUT:overseer.exe overseer.o %THIRD_PARTY_OBJ% /SUBSYSTEM:WINDOWS /DEBUG /OPT:REF
 
 popd

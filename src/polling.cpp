@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 global bool polling_running = false;
+global bool changes_ready   = false;
 
 // Circular buffer that grows to a maximum
 global CpuPercents cpu_history[POLLING_HISTORY_LENGTH];
@@ -36,6 +37,12 @@ api_method void polling_begin() {
 
 api_method void polling_end() {
 	polling_running = false;
+}
+
+api_method bool polling_check_for_changes() {
+	bool changes  = changes_ready;
+	changes_ready = false;
+	return changes;
 }
 
 api_method CpuHistory polling_get_cpu_history() {
@@ -80,6 +87,21 @@ api_method MemoryHistory polling_get_memory_history() {
 		.start  = last_time - (f64)(arrlen(memory_history) - 1),
 		.end    = last_time,
 	};
+}
+
+api_method View<ProcessData*> polling_collect_processes(Arena* arena) {
+	View<ProcessData*> output = {.len = processes.count};
+	alloc_array(arena, &output);
+
+	u64 idx = 0;
+	ProcessData* process = processes.head;
+	while (idx < output.len && process) {
+		output[idx++] = process;
+		process       = process->next;
+	}
+	output.len = idx;
+
+	return output;
 }
 
 internal u32 WINCALLBACK polling_thread(void* param) {
@@ -289,34 +311,36 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 					process->create_time = proc_info->create_time;
 					process->threads     = { };
 
-					process->image_name_len = WideCharToMultiByte(
-						CP_UTF8, 0,
-						proc_info->image_name.buffer, proc_info->image_name.length / sizeof(wchar_t),
-						process->image_name, sizeof(process->image_name) - 1,
-						NULL, NULL
-					);
+					if (process->pid) {
+						process->image_name_len = WideCharToMultiByte(
+							CP_UTF8, 0,
+							proc_info->image_name.buffer, proc_info->image_name.length / sizeof(wchar_t),
+							process->image_name, sizeof(process->image_name) - 1,
+							NULL, NULL
+						);
+					} else {
+						StringZ name = S("System Idle Process");
+						process->image_name_len = name.len;
+						memcpy(process->image_name, name.ptr, min(name.len, sizeof(process->image_name)));
+					}
 					process->image_name[process->image_name_len] = 0;
 
 					process->history.offset = 0;
 					process->history.length  = 0;
-
-					debug_log(
-						"[CREATED PROCESS] Process: %s (%d)",
-						process->image_name, process->pid
-					);
 				}
 
 				process->threads.count = proc_info->number_of_threads;
 				process->handle_count  = proc_info->handle_count;
 
 				const f64 ticks_per_second = 10'000'000;
-				process->uptime      = (f64)(proc_info->create_time - system_time)          / ticks_per_second;
+				process->uptime      = (f64)(system_time - proc_info->create_time)          / ticks_per_second;
 				process->user_time   = (f64)(proc_info->user_time)                          / ticks_per_second;
 				process->kernel_time = (f64)(proc_info->kernel_time)                        / ticks_per_second;
 				process->cpu_time    = (f64)(proc_info->user_time + proc_info->kernel_time) / ticks_per_second;
 
-				process->ram         = proc_info->working_set_private_size;
-				process->commit      = proc_info->private_page_count;
+				process->ram              = proc_info->working_set_private_size;
+				process->commit           = proc_info->private_page_count;
+				process->hard_fault_count = proc_info->hard_fault_count;
 
 				for (u32 thread_idx = 0; thread_idx < proc_info->number_of_threads; thread_idx++) {
 					SystemThreadInformation* thread_info = &proc_info->threads[thread_idx];
@@ -357,11 +381,6 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 						thread->history.offset = 0;
 						thread->history.length = 0;
-
-						debug_log(
-							"[CREATED THREAD] Process: %s (%d), Thread: %d",
-							thread->process->image_name, thread->process->pid, thread->tid
-						);
 					}
 
 					thread->uptime      = (f64)(thread_info->create_time - system_time)            / ticks_per_second;
@@ -406,13 +425,6 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 						thread->next     = thread_free_list;
 						thread_free_list = thread;
-
-						if (process->touched) {
-							debug_log(
-								"[REMOVED THREAD] Process: %s (%d), Thread: %d",
-								thread->process->image_name, thread->process->pid, thread->tid
-							);
-						}
 					}
 
 					thread->touched = false;
@@ -436,11 +448,6 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 					process->next     = process_free_list;
 					process_free_list = process;
-
-					debug_log(
-						"[REMOVED PROCESS] Process: %s (%d)",
-						process->image_name, process->pid
-					);
 				}
 
 				process->touched = false;
@@ -452,18 +459,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 		poll_count++;
 
-
-		u32 proc_free_count   = 0;
-		u32 thread_free_count = 0;
-		for (auto proc = process_free_list; proc; proc = proc->next) proc_free_count++;
-		for (auto thread = thread_free_list; thread; thread = thread->next) thread_free_count++;
-
-		debug_log("Processes:         %d", processes.count);
-		debug_log("Threads:           %d", thread_count);
-		debug_log("Process Free List: %d", proc_free_count);
-		debug_log("Thread Free List:  %d", thread_free_count);
-		debug_log("Arena Usage:       %$$lu", arena.used);
-
+		changes_ready = true;
 		// TODO(hhammon) Do actual timing
 		Sleep(1000);
 	}

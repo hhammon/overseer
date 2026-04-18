@@ -8,6 +8,8 @@
 #include "imgui_impl_dx11.h"
 #include "implot.h"
 
+#include <stdlib.h>
+
 global HWnd                    window              = NULL;
 global IDXGISwapChain*         swap_chain          = NULL;
 global ID3D11Device*           device              = NULL;
@@ -29,28 +31,49 @@ internal s64 WINCALLBACK wnd_proc(
 	s64 l_param
 );
 
-internal void do_ui() {
-	const ImGuiViewport* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(viewport->WorkPos);
-	ImGui::SetNextWindowSize(viewport->WorkSize);
+internal void imgui_string(String str) {
+	ImGui::TextUnformatted(str.ptr, str.ptr + str.len);
+}
+#define imgui_printf(fmt, ...) imgui_string(scratch_sprintf(fmt, ## __VA_ARGS__))
 
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+internal void imgui_string_right(String str) {
+	f32 text_width = ImGui::CalcTextSize(str.ptr, str.ptr + str.len).x;
+	f32 cell_width = ImGui::GetContentRegionAvail().x;
+	ImGui::SetCursorPosX(ImGui::GetCursorPosX() + cell_width - text_width);
+	ImGui::TextUnformatted(str.ptr, str.ptr + str.len);
+}
+#define imgui_printf_right(fmt, ...) imgui_string_right(scratch_sprintf(fmt, ## __VA_ARGS__))
 
-	ImGui::Begin(
-		"MainWindow",
-		NULL,
-		ImGuiWindowFlags_NoTitleBar            |
-		ImGuiWindowFlags_MenuBar               |
-		ImGuiWindowFlags_NoResize              |
-		ImGuiWindowFlags_NoMove                |
-		ImGuiWindowFlags_NoCollapse            |
-		ImGuiWindowFlags_NoBringToFrontOnFocus |
-		ImGuiWindowFlags_NoNavFocus
-	);
+internal StringZ format_timespan(f64 secs, Arena* arena) {
+	bool negative = false;
+	if (secs < 0) {
+		negative = true;
+		secs *= -1;
+	}
 
-	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
+	u32 seconds = (u32)(secs + 0.5);
+
+	u32 minute = 60;
+	u32 hour   = 60 * minute;
+	u32 day    = 24 * hour;
+
+	u32 days    = seconds / day;
+	seconds    -= days * day;
+	u32 hours   = seconds / hour;
+	seconds    -= hours * hour;
+	u32 minutes = seconds / minute;
+	seconds    -= minutes * minute;
+
+	if (days) {
+		return arena_sprintf(arena, "%s%u:%02u:%02u:%02u", negative ? "-" : "", days, hours, minutes, seconds);
+	} else {
+		return arena_sprintf(arena, "%s%02u:%02u:%02u", negative ? "-" : "", hours, minutes, seconds);
+	}
+}
+#define scratch_format_timespan(secs) format_timespan(secs, &scratch_arena)
+
+internal void tab_performance() {
+	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
 		CpuHistory   cpu_history = polling_get_cpu_history();
 		CpuPercents* base        = cpu_history.base;
 		u64          length      = cpu_history.length;
@@ -74,7 +97,7 @@ internal void do_ui() {
 		ImPlot::EndPlot();
 	}
 
-	if (ImPlot::BeginPlot("Memory Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 20))) {
+	if (ImPlot::BeginPlot("Memory Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
 		MemoryHistory   memory_history = polling_get_memory_history();
 		MemoryPercents* base           = memory_history.base;
 		u64             length         = memory_history.length;
@@ -100,8 +123,308 @@ internal void do_ui() {
 
 		ImPlot::EndPlot();
 	}
+}
+
+enum ProcessTableColumn {
+	ProcessTableColumn_NAME,
+	ProcessTableColumn_PID,
+	ProcessTableColumn_RAM,
+	ProcessTableColumn_COMMIT,
+	ProcessTableColumn_UP_TIME,
+	ProcessTableColumn_CPU_TIME,
+	ProcessTableColumn_USER_TIME,
+	ProcessTableColumn_KERNEL_TIME,
+	ProcessTableColumn_THREADS,
+	ProcessTableColumn_HANDLES,
+	ProcessTableColumn_HARD_FAULTS,
+
+	ProcessTableColumn__COUNT,
+};
+
+internal int cmp_u64(u64 a, u64 b) {
+	if (a < b) return -1;
+	if (a > b) return 1;
+	return 0;
+}
+
+internal int cmp_f64(f64 a, f64 b) {
+	if (a < b) return -1;
+	if (a > b) return 1;
+	return 0;
+}
+
+internal int __cdecl proc_cmp_image_name_asc(ProcessData** a, ProcessData** b) {
+	return _stricmp((*a)->image_name, (*b)->image_name);
+}
+internal int __cdecl proc_cmp_image_name_desc(ProcessData** a, ProcessData** b) {
+	return -_stricmp((*a)->image_name, (*b)->image_name);
+}
+
+internal int __cdecl proc_cmp_pid_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->pid, (*b)->pid);
+}
+internal int __cdecl proc_cmp_pid_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->pid, (*b)->pid);
+}
+
+internal int __cdecl proc_cmp_ram_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->ram, (*b)->ram);
+}
+internal int __cdecl proc_cmp_ram_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->ram, (*b)->ram);
+}
+
+internal int __cdecl proc_cmp_commit_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->commit, (*b)->commit);
+}
+internal int __cdecl proc_cmp_commit_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->commit, (*b)->commit);
+}
+
+internal int __cdecl proc_cmp_uptime_asc(ProcessData** a, ProcessData** b) {
+	return cmp_f64((*a)->uptime, (*b)->uptime);
+}
+internal int __cdecl proc_cmp_uptime_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_f64((*a)->uptime, (*b)->uptime);
+}
+
+internal int __cdecl proc_cmp_cpu_time_asc(ProcessData** a, ProcessData** b) {
+	return cmp_f64((*a)->cpu_time, (*b)->cpu_time);
+}
+internal int __cdecl proc_cmp_cpu_time_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_f64((*a)->cpu_time, (*b)->cpu_time);
+}
+
+internal int __cdecl proc_cmp_user_time_asc(ProcessData** a, ProcessData** b) {
+	return cmp_f64((*a)->user_time, (*b)->user_time);
+}
+internal int __cdecl proc_cmp_user_time_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_f64((*a)->user_time, (*b)->user_time);
+}
+
+internal int __cdecl proc_cmp_kernel_time_asc(ProcessData** a, ProcessData** b) {
+	return cmp_f64((*a)->kernel_time, (*b)->kernel_time);
+}
+internal int __cdecl proc_cmp_kernel_time_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_f64((*a)->kernel_time, (*b)->kernel_time);
+}
+
+internal int __cdecl proc_cmp_threads_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->threads.count, (*b)->threads.count);
+}
+internal int __cdecl proc_cmp_threads_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->threads.count, (*b)->threads.count);
+}
+
+internal int __cdecl proc_cmp_handles_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->handle_count, (*b)->handle_count);
+}
+internal int __cdecl proc_cmp_handles_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->handle_count, (*b)->handle_count);
+}
+
+internal int __cdecl proc_cmp_hard_faults_asc(ProcessData** a, ProcessData** b) {
+	return cmp_u64((*a)->hard_fault_count, (*b)->hard_fault_count);
+}
+internal int __cdecl proc_cmp_hard_faults_desc(ProcessData** a, ProcessData** b) {
+	return -cmp_u64((*a)->hard_fault_count, (*b)->hard_fault_count);
+}
+
+internal void tab_processes() {
+	local_persist Arena arena      = arena_create(1 * GIGABYTE);
+	local_persist bool  arena_init =  false;
+	if (!arena_init) {
+		arena_frame_begin(&arena);
+		arena_init = true;
+	}
+
+	local_persist View<ProcessData*> processes = { };
+
+	scratch_begin();
+
+	bool needs_sort = false;
+	if (polling_check_for_changes()) {
+		arena_frame_end(&arena);
+		arena_frame_begin(&arena);
+		processes = polling_collect_processes(&arena);
+		needs_sort = true;
+	}
+
+	CString column_names[ProcessTableColumn__COUNT] = {
+		"Name",
+		"PID",
+		"RAM",
+		"Commit",
+		"Up Time",
+		"CPU Time",
+		"User Time",
+		"Kernel Time",
+		"Threads",
+		"Handles",
+		"Hard Faults",
+	};
+
+	int (__cdecl* process_comparers_asc[ProcessTableColumn__COUNT])(const void*, const void*) = {
+		(int (__cdecl*)(const void*, const void*))proc_cmp_image_name_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_pid_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_ram_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_commit_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_uptime_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_cpu_time_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_user_time_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_kernel_time_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_threads_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_handles_asc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_hard_faults_asc,
+	};
+
+	int (__cdecl* process_comparers_desc[ProcessTableColumn__COUNT])(const void*, const void*) = {
+		(int (__cdecl*)(const void*, const void*))proc_cmp_image_name_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_pid_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_ram_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_commit_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_uptime_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_cpu_time_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_user_time_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_kernel_time_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_threads_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_handles_desc,
+		(int (__cdecl*)(const void*, const void*))proc_cmp_hard_faults_desc,
+	};
+
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 4.0f));
+	if (ImGui::BeginTable(
+		"ProcessTable",
+		ProcessTableColumn__COUNT,
+		ImGuiTableFlags_Resizable              |
+		ImGuiTableFlags_Reorderable            |
+		ImGuiTableFlags_Hideable               |
+		ImGuiTableFlags_BordersOuter           |
+		ImGuiTableFlags_BordersV               |
+		ImGuiTableFlags_SizingFixedFit         |
+		ImGuiTableFlags_ScrollY                |
+		ImGuiTableFlags_HighlightHoveredColumn |
+		ImGuiTableFlags_Sortable               |
+		0
+	)) {
+		for (u32 col_idx = 0; col_idx < ProcessTableColumn__COUNT; col_idx++) {
+			ImGui::TableSetupColumn(column_names[col_idx], 0);
+		}
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableHeadersRow();
+
+		if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
+			if (sort_specs->SpecsDirty || needs_sort) {
+				if (sort_specs->Specs[0].SortDirection == ImGuiSortDirection_Ascending) {
+					qsort(
+						processes.ptr, processes.len, sizeof(processes.ptr[0]),
+						process_comparers_asc[sort_specs->Specs[0].ColumnIndex]
+					);
+				} else {
+					qsort(
+						processes.ptr, processes.len, sizeof(processes.ptr[0]),
+						process_comparers_desc[sort_specs->Specs[0].ColumnIndex]
+					);
+				}
+
+				sort_specs->SpecsDirty = false;
+			}
+		}
+
+		ImGuiListClipper clipper;
+		clipper.Begin(processes.len);
+		while (clipper.Step()) {
+			for (int proc_idx = clipper.DisplayStart; proc_idx < clipper.DisplayEnd; proc_idx++) {
+				ProcessData* process = processes[proc_idx];
+
+				ImGui::TableNextRow();
+				for (u32 col_idx = 0; col_idx < ProcessTableColumn__COUNT; col_idx++) {
+					ImGui::TableSetColumnIndex(col_idx);
+					switch (col_idx) {
+					case ProcessTableColumn_NAME: {
+						imgui_string((String){
+							.ptr = process->image_name,
+							.len = process->image_name_len
+						});
+					} break;
+					case ProcessTableColumn_PID: {
+						imgui_printf_right("%llu", process->pid);
+					} break;
+					case ProcessTableColumn_RAM: {
+						imgui_printf_right("%_$$llu", process->ram);
+					} break;
+					case ProcessTableColumn_COMMIT: {
+						imgui_printf_right("%_$$llu", process->commit);
+					} break;
+					case ProcessTableColumn_UP_TIME: {
+						imgui_string_right(scratch_format_timespan(process->uptime));
+					} break;
+					case ProcessTableColumn_CPU_TIME: {
+						imgui_string_right(scratch_format_timespan(process->cpu_time));
+					} break;
+					case ProcessTableColumn_USER_TIME: {
+						imgui_string_right(scratch_format_timespan(process->user_time));
+					} break;
+					case ProcessTableColumn_KERNEL_TIME: {
+						imgui_string_right(scratch_format_timespan(process->kernel_time));
+					} break;
+					case ProcessTableColumn_THREADS: {
+						imgui_printf_right("%llu", process->threads.count);
+					} break;
+					case ProcessTableColumn_HANDLES: {
+						imgui_printf_right("%llu", process->handle_count);
+					} break;
+					case ProcessTableColumn_HARD_FAULTS: {
+						imgui_printf_right("%llu", process->hard_fault_count);
+					} break;
+					}
+				}
+			}
+		}
+
+		ImGui::EndTable();
+	}
+	ImGui::PopStyleVar();
+
+	scratch_end();
+}
+
+internal void do_ui() {
+	const ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(viewport->WorkPos);
+	ImGui::SetNextWindowSize(viewport->WorkSize);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::PushFont(NULL, 16);
+
+	ImGui::Begin(
+		"MainWindow",
+		NULL,
+		ImGuiWindowFlags_NoTitleBar            |
+		// ImGuiWindowFlags_MenuBar               |
+		ImGuiWindowFlags_NoResize              |
+		ImGuiWindowFlags_NoMove                |
+		ImGuiWindowFlags_NoCollapse            |
+		ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoNavFocus
+	);
+
+	if (ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_Reorderable)) {
+		if (ImGui::BeginTabItem("Processes")) {
+			tab_processes();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Performance")) {
+			tab_performance();
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
+	}
 
 	ImGui::End();
+	ImGui::PopFont();
 	ImGui::PopStyleVar(3);
 }
 
