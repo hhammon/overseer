@@ -183,9 +183,10 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 		swap_vars(cpu_stats, cpu_stats_last);
 
+		SystemPageFileInformationEx  page_file_info;
+		SystemPerformanceInformation sys_perf_info;
 		{
 			// Poll memory stats
-			SystemPageFileInformationEx page_file_info;
 			u32 page_file_info_return_size;
 			NtQuerySystemInformation(
 				SysInfoClass_SYSTEM_PAGE_FILE_INFORMATION_EX,
@@ -195,7 +196,6 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			);
 			assert(page_file_info_return_size >= sizeof(page_file_info));
 
-			SystemPerformanceInformation sys_perf_info;
 			u32 sys_perf_info_return_size;
 			NtQuerySystemInformation(
 				SysInfoClass_SYSTEM_PERFORMANCE_INFORMATION,
@@ -282,6 +282,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 						process = alloc_item(&arena, ProcessData);
 					}
 
+					process->alive = true;
 					process->prev = processes.tail;
 					process->next = NULL;
 					if (!processes.head) {
@@ -342,14 +343,39 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				process->commit           = proc_info->private_page_count;
 				process->hard_fault_count = proc_info->hard_fault_count;
 
-				if (!init_process) {
-					// We have a previous tick for an interval
+				if (!init_process) { // We have a previous tick for an interval
 					u64 user_diff        = proc_info->user_time   - process->user_cpu_last;
 					u64 kernel_diff      = proc_info->kernel_time - process->kernel_cpu_last;
 					u64 system_time_diff = system_time            - process->system_time_last;
 					u64 cpu_diff         = user_diff + kernel_diff;
 					u64 cpu_total        = system_time_diff * sys_basic_info.number_of_processors;
 					process->cpu_pct     = ((f64)cpu_diff / cpu_total) * 100;
+
+					f64 cpu_pct    = ((f64)cpu_diff    / cpu_total) * 100;
+					f64 user_pct   = ((f64)user_diff   / cpu_total) * 100;
+					f64 kernel_pct = ((f64)kernel_diff / cpu_total) * 100;
+
+					u64 total_ram    = sys_basic_info.number_of_physical_pages * sys_basic_info.page_size;
+					u64 commit_limit = sys_perf_info.commit_limit * sys_basic_info.page_size;
+					f64 ram_pct      = ((f64)process->ram    / total_ram)    * 100;
+					f64 commit_pct   = ((f64)process->commit / commit_limit) * 100;
+
+					u64 index = (process->history.offset + process->history.length) % arrlen(process->history.buffer);
+					process->history.buffer[index].time   = process->uptime;
+					process->history.buffer[index].cpu    = cpu_pct;
+					process->history.buffer[index].user   = user_pct;
+					process->history.buffer[index].kernel = kernel_pct;
+					process->history.buffer[index].ram    = ram_pct;
+					process->history.buffer[index].commit = commit_pct;
+
+					if (process->history.length < arrlen(process->history.buffer)) {
+						process->history.length++;
+					} else {
+						process->history.offset = (process->history.offset + 1) % arrlen(process->history.buffer);
+					}
+
+					process->history.start = process->uptime - 300.0;
+					process->history.end   = process->uptime;
 				} else {
 					process->cpu_pct = 0.0;
 				}
@@ -464,6 +490,8 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 					process->next     = process_free_list;
 					process_free_list = process;
+
+					process->alive = false;
 				}
 
 				process->touched = false;

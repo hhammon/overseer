@@ -114,9 +114,10 @@ struct ProcessData {
 	u64            image_name_len;
 	char           image_name[256];
 	ProcessHistory history;
-	u64            system_time_last;
-	u64            user_cpu_last;
-	u64            kernel_cpu_last;
+	u64            system_time_last; // Internal
+	u64            user_cpu_last;    // Internal
+	u64            kernel_cpu_last;  // Internal
+	b8             alive;
 	b8             touched; // Internal flag
 };
 

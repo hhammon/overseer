@@ -19,6 +19,17 @@ global bool                    swap_chain_occluded = false;
 global u32                     resize_width        = 0;
 global u32                     resize_height       = 0;
 
+// NOTE(hhammon) Some sort of generational handle and linked list node
+struct ProcessTab {
+	ProcessTab*  prev;
+	ProcessTab*  next;
+	ProcessData* process;
+	u64          pid;
+	u64          create_time;
+	bool         open;
+};
+ProcessData* opening_tab_process = NULL;
+
 internal void create_render_device();
 internal void create_render_target();
 internal void destroy_render_device();
@@ -373,7 +384,6 @@ internal void tab_processes() {
 							0
 						)) {
 							selected_pid = process->pid;
-							debug_log("%llu selected", process->pid);
 
 							if (
 								ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) ||
@@ -381,7 +391,7 @@ internal void tab_processes() {
 								ImGui::IsKeyDown(ImGuiKey_KeypadEnter)             ||
 								0
 							) {
-								debug_log("%llu opened", process->pid);
+								opening_tab_process = process;
 							}
 						}
 					} break;
@@ -430,6 +440,137 @@ internal void tab_processes() {
 	scratch_end();
 }
 
+internal void tab_process(ProcessData* process) {
+		if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
+		ProcessHistoryPoint* base   = process->history.buffer;
+		u64                  length = process->history.length;
+
+		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+		ImPlot::SetupAxisLimits(ImAxis_X1, process->history.start, process->history.end, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100, ImGuiCond_Always);
+
+		ImPlotSpec spec = {};
+		spec.Offset = process->history.offset;
+		spec.Stride = sizeof(base[0]);
+
+		ImVec4 cpu_color    = ImVec4(0.2f, 0.8f, 1.0f, 1.0f);
+		ImVec4 kernel_color = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
+
+		spec.LineColor = cpu_color;
+		ImPlot::PlotLine("All", &base->time, &base->cpu, length, spec);
+		spec.LineColor = kernel_color;
+		ImPlot::PlotLine("Kernel", &base->time, &base->kernel, length, spec);
+
+		ImPlot::EndPlot();
+	}
+
+	if (ImPlot::BeginPlot("Memory Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
+		ProcessHistoryPoint* base   = process->history.buffer;
+		u64                  length = process->history.length;
+
+		ImPlot::SetupAxes(NULL, NULL, ImPlotAxisFlags_NoTickLabels, 0);
+		ImPlot::SetupAxisLimits(ImAxis_X1, process->history.start, process->history.end, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 100, ImGuiCond_Always);
+
+		ImPlotSpec spec = {};
+		spec.Offset = process->history.offset;
+		spec.Stride = sizeof(base[0]);
+
+		ImVec4 ram_color    = ImVec4(0.8f, 0.3f, 0.7f, 1.0f);
+		ImVec4 commit_color = ImVec4(0.1f, 0.9f, 0.1f, 1.0f);
+
+		spec.LineColor = ram_color;
+		ImPlot::PlotLine("RAM", &base->time, &base->ram, length, spec);
+		spec.LineColor = commit_color;
+		ImPlot::PlotLine("Commit", &base->time, &base->commit, length, spec);
+
+		ImPlot::EndPlot();
+	}
+}
+
+internal void process_tabs() {
+	local_persist Arena arena = arena_create(1 * GIGABYTE);
+	local_persist ProcessTab* tabs_head = NULL;
+	local_persist ProcessTab* tabs_tail = NULL;
+	local_persist ProcessTab* free_list = NULL;
+
+	// Remove any that are now invalid and check if an open process is being opened again
+	ProcessTab* tab = tabs_head;
+	ProcessTab* opening = NULL;
+	while (tab) {
+		ProcessTab* next_tab = tab->next;
+
+		if (
+			!(tab->process->alive)                           ||
+			!(tab->process->pid         == tab->pid)         ||
+			!(tab->process->create_time == tab->create_time) ||
+			!(tab->open)
+		) {
+			if (tab->prev) {
+				tab->prev->next = tab->next;
+			} else {
+				tabs_head = tab->next;
+			}
+
+			if (tab->next) {
+				tab->next->prev = tab->prev;
+			} else {
+				tabs_tail = tab->prev;
+			}
+
+			tab->next = free_list;
+			free_list = tab;
+		} else if (tab->process == opening_tab_process) {
+			opening = tab;
+		}
+
+		tab = next_tab;
+	}
+
+	if (opening_tab_process && !opening) {
+		if (free_list) {
+			opening   = free_list;
+			free_list = opening->next;
+		} else {
+			opening = alloc_item(&arena, ProcessTab);
+		}
+
+		opening->prev = tabs_tail;
+		opening->next = NULL;
+		if (tabs_tail) {
+			tabs_tail->next = opening;
+			tabs_tail = opening;
+		} else {
+			tabs_head = opening;
+			tabs_tail = opening;
+		}
+
+		opening->process     = opening_tab_process;
+		opening->pid         = opening_tab_process->pid;
+		opening->create_time = opening_tab_process->create_time;
+		opening->open        = true;
+	}
+
+	opening_tab_process = NULL;
+
+	tab = tabs_head;
+	while (tab) {
+		ProcessTab* next_tab = tab->next;
+
+		ProcessData* process = tab->process;
+		if (ImGui::BeginTabItem(
+			scratch_sprintf("%s (%llu)", process->image_name, process->pid).ptr,
+			&tab->open,
+			(tab == opening) ? ImGuiTabItemFlags_SetSelected : 0
+		)) {
+			tab_process(process);
+			ImGui::EndTabItem();
+		}
+
+		tab = next_tab;
+	}
+}
+
 internal void do_ui() {
 	const ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -452,7 +593,12 @@ internal void do_ui() {
 		ImGuiWindowFlags_NoNavFocus
 	);
 
-	if (ImGui::BeginTabBar("Tabs", ImGuiTabBarFlags_Reorderable)) {
+	if (ImGui::BeginTabBar(
+		"Tabs",
+		ImGuiTabBarFlags_Reorderable         |
+		ImGuiTabBarFlags_FittingPolicyScroll |
+		ImGuiTabBarFlags_TabListPopupButton
+	)) {
 		if (ImGui::BeginTabItem("Processes")) {
 			tab_processes();
 			ImGui::EndTabItem();
@@ -461,6 +607,7 @@ internal void do_ui() {
 			tab_performance();
 			ImGui::EndTabItem();
 		}
+		process_tabs();
 		ImGui::EndTabBar();
 	}
 
