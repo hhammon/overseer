@@ -153,6 +153,18 @@ enum ProcessTableColumn {
 	ProcessTableColumn__COUNT,
 };
 
+enum ThreadTableColumn {
+	ThreadTableColumn_TID,
+	ThreadTableColumn_CPU,
+	ThreadTableColumn_UP_TIME,
+	ThreadTableColumn_CPU_TIME,
+	ThreadTableColumn_USER_TIME,
+	ThreadTableColumn_KERNEL_TIME,
+	ThreadTableColumn_CONTEXT_SWITCHES,
+
+	ThreadTableColumn__COUNT,
+};
+
 internal int cmp_u64(u64 a, u64 b) {
 	if (a < b) return -1;
 	if (a > b) return 1;
@@ -249,7 +261,7 @@ internal int __cdecl proc_cmp_hard_faults_desc(ProcessData** a, ProcessData** b)
 	return -cmp_u64((*a)->hard_fault_count, (*b)->hard_fault_count);
 }
 
-internal void tab_processes() {
+internal void tab_processes(bool polling_changes) {
 	local_persist Arena arena      = arena_create(1 * GIGABYTE);
 	local_persist bool  arena_init =  false;
 	if (!arena_init) {
@@ -262,7 +274,7 @@ internal void tab_processes() {
 	scratch_begin();
 
 	bool needs_sort = false;
-	if (polling_check_for_changes()) {
+	if (polling_changes) {
 		arena_frame_end(&arena);
 		arena_frame_begin(&arena);
 		processes = polling_collect_processes(&arena);
@@ -440,8 +452,221 @@ internal void tab_processes() {
 	scratch_end();
 }
 
-internal void tab_process(ProcessData* process) {
-		if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
+internal int thread_cmp_tid_asc(ThreadData** a, ThreadData** b) {
+	return cmp_u64((*a)->tid, (*b)->tid);
+}
+internal int thread_cmp_tid_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_u64((*a)->tid, (*b)->tid);
+}
+
+internal int __cdecl thread_cmp_cpu_asc(ThreadData** a, ThreadData** b) {
+	return cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
+}
+internal int __cdecl thread_cmp_cpu_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
+}
+
+internal int __cdecl thread_cmp_uptime_asc(ThreadData** a, ThreadData** b) {
+	return cmp_f64((*a)->uptime, (*b)->uptime);
+}
+internal int __cdecl thread_cmp_uptime_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_f64((*a)->uptime, (*b)->uptime);
+}
+
+internal int __cdecl thread_cmp_cpu_time_asc(ThreadData** a, ThreadData** b) {
+	return cmp_f64((*a)->cpu_time, (*b)->cpu_time);
+}
+internal int __cdecl thread_cmp_cpu_time_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_f64((*a)->cpu_time, (*b)->cpu_time);
+}
+
+internal int __cdecl thread_cmp_user_time_asc(ThreadData** a, ThreadData** b) {
+	return cmp_f64((*a)->user_time, (*b)->user_time);
+}
+internal int __cdecl thread_cmp_user_time_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_f64((*a)->user_time, (*b)->user_time);
+}
+
+internal int __cdecl thread_cmp_kernel_time_asc(ThreadData** a, ThreadData** b) {
+	return cmp_f64((*a)->kernel_time, (*b)->kernel_time);
+}
+internal int __cdecl thread_cmp_kernel_time_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_f64((*a)->kernel_time, (*b)->kernel_time);
+}
+
+internal int thread_cmp_context_switches_asc(ThreadData** a, ThreadData** b) {
+	return cmp_u64((*a)->context_switches, (*b)->context_switches);
+}
+internal int thread_cmp_context_switches_desc(ThreadData** a, ThreadData** b) {
+	return -cmp_u64((*a)->context_switches, (*b)->context_switches);
+}
+
+internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
+	local_persist ThreadData* selected_thread = NULL;
+	local_persist s64         pid                 = -1;
+	local_persist u64         process_create_time =  0;
+
+	if ((s64)process->pid != pid || process->create_time != process_create_time) {
+		// NOTE(hhammon) This prevents state state from persisting if tabs switch... Okay for a jam.
+		pid = process->pid;
+		process_create_time = process->create_time;
+		selected_thread     = NULL;
+	}
+
+	local_persist Arena arena      = arena_create(1 * GIGABYTE);
+	local_persist bool  arena_init =  false;
+	if (!arena_init) {
+		arena_frame_begin(&arena);
+		arena_init = true;
+	}
+
+	local_persist View<ThreadData*> threads = { };
+
+	scratch_begin();
+
+	bool needs_sort = false;
+	if (polling_changes) {
+		arena_frame_end(&arena);
+		arena_frame_begin(&arena);
+		threads = polling_collect_threads(&arena, process);
+		needs_sort = true;
+	}
+
+	CString column_names[ThreadTableColumn__COUNT] = {
+		"TID",
+		"CPU",
+		"Up Time",
+		"CPU Time",
+		"User Time",
+		"Kernel Time",
+		"Context Switches",
+	};
+
+	int (__cdecl* process_comparers_asc[ThreadTableColumn__COUNT])(const void*, const void*) = {
+		(int (__cdecl*)(const void*, const void*))thread_cmp_tid_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_uptime_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_time_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_user_time_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_kernel_time_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_context_switches_asc,
+	};
+
+	int (__cdecl* process_comparers_desc[ThreadTableColumn__COUNT])(const void*, const void*) = {
+		(int (__cdecl*)(const void*, const void*))thread_cmp_tid_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_uptime_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_time_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_user_time_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_kernel_time_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_context_switches_desc,
+	};
+
+	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 4.0f));
+	if (ImGui::BeginTable(
+		scratch_sprintf("ThreadTable##%llu", process->pid).ptr,
+		ThreadTableColumn__COUNT,
+		ImGuiTableFlags_Resizable              |
+		ImGuiTableFlags_Reorderable            |
+		ImGuiTableFlags_Hideable               |
+		ImGuiTableFlags_BordersOuter           |
+		ImGuiTableFlags_BordersV               |
+		ImGuiTableFlags_SizingFixedFit         |
+		ImGuiTableFlags_ScrollX                |
+		ImGuiTableFlags_HighlightHoveredColumn |
+		ImGuiTableFlags_Sortable               |
+		0
+	)) {
+		for (u32 col_idx = 0; col_idx < ThreadTableColumn__COUNT; col_idx++) {
+			ImGui::TableSetupColumn(
+				column_names[col_idx],
+				(
+					col_idx == ThreadTableColumn_TID
+				 ) ?
+				 ImGuiTableColumnFlags_PreferSortAscending :
+				 ImGuiTableColumnFlags_PreferSortDescending
+			);
+		}
+		ImGui::TableSetupScrollFreeze(1, 1);
+		ImGui::TableHeadersRow();
+
+		if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
+			if (sort_specs->SpecsDirty || needs_sort) {
+				if (sort_specs->Specs[0].SortDirection == ImGuiSortDirection_Ascending) {
+					qsort(
+						threads.ptr, threads.len, sizeof(threads.ptr[0]),
+						process_comparers_asc[sort_specs->Specs[0].ColumnIndex]
+					);
+				} else {
+					qsort(
+						threads.ptr, threads.len, sizeof(threads.ptr[0]),
+						process_comparers_desc[sort_specs->Specs[0].ColumnIndex]
+					);
+				}
+
+				sort_specs->SpecsDirty = false;
+			}
+		}
+
+		ImGuiListClipper clipper;
+		clipper.Begin(threads.len);
+		while (clipper.Step()) {
+			for (int thread_idx = clipper.DisplayStart; thread_idx < clipper.DisplayEnd; thread_idx++) {
+				ThreadData* thread = threads[thread_idx];
+
+				ImGui::TableNextRow();
+				for (u32 col_idx = 0; col_idx < ThreadTableColumn__COUNT; col_idx++) {
+					ImGui::TableSetColumnIndex(col_idx);
+					switch (col_idx) {
+					case ThreadTableColumn_TID: {
+						// TODO(hhammon) This really is a terribly way to do this for a lot of reasons.
+						if (ImGui::Selectable(
+							scratch_sprintf("%llu", thread->tid).ptr,
+							thread == selected_thread,
+							ImGuiSelectableFlags_SpanAllColumns   |
+							ImGuiSelectableFlags_AllowOverlap     |
+							ImGuiSelectableFlags_AllowDoubleClick |
+							0
+						)) {
+							selected_thread = thread;
+						}
+					} break;
+					case ThreadTableColumn_CPU: {
+						imgui_printf_right("%05.2lf%%", thread->cpu_pct);
+					} break;
+					case ThreadTableColumn_UP_TIME: {
+						imgui_string_right(scratch_format_timespan(thread->uptime));
+					} break;
+					case ThreadTableColumn_CPU_TIME: {
+						imgui_string_right(scratch_format_timespan(thread->cpu_time));
+					} break;
+					case ThreadTableColumn_USER_TIME: {
+						imgui_string_right(scratch_format_timespan(thread->user_time));
+					} break;
+					case ThreadTableColumn_KERNEL_TIME: {
+						imgui_string_right(scratch_format_timespan(thread->kernel_time));
+					} break;
+					case ThreadTableColumn_CONTEXT_SWITCHES: {
+						imgui_printf_right("%llu", thread->context_switches);
+					} break;
+					}
+				}
+			}
+		}
+
+		ImGui::EndTable();
+	}
+	ImGui::PopStyleVar();
+
+	scratch_end();
+
+	return selected_thread;
+}
+
+internal void tab_process(ProcessData* process, bool polling_changes) {
+	local_persist ThreadData* selected_thread = NULL;
+
+	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
 		ProcessHistoryPoint* base   = process->history.buffer;
 		u64                  length = process->history.length;
 
@@ -453,13 +678,34 @@ internal void tab_process(ProcessData* process) {
 		spec.Offset = process->history.offset;
 		spec.Stride = sizeof(base[0]);
 
-		ImVec4 cpu_color    = ImVec4(0.2f, 0.8f, 1.0f, 1.0f);
-		ImVec4 kernel_color = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
+		ImVec4 cpu_color           = ImVec4(0.2f, 0.8f, 1.0f, 1.0f);
+		ImVec4 kernel_color        = ImVec4(0.8f, 0.6f, 0.2f, 1.0f);
+		ImVec4 thread_cpu_color    = ImVec4(0.1f, 0.4f, 0.5f, 1.0f);
+		ImVec4 thread_kernel_color = ImVec4(0.4f, 0.3f, 0.1f, 1.0f);
 
 		spec.LineColor = cpu_color;
 		ImPlot::PlotLine("All", &base->time, &base->cpu, length, spec);
 		spec.LineColor = kernel_color;
 		ImPlot::PlotLine("Kernel", &base->time, &base->kernel, length, spec);
+
+		if (selected_thread) {
+			scratch_begin();
+			ThreadHistoryPoint* thread_base   = selected_thread->history.buffer;
+			u64                 thread_length = selected_thread->history.length;
+
+			CString thread_cpu_label    = scratch_sprintf("Thread %llu CPU",    selected_thread->tid).ptr;
+			CString thread_kernel_label = scratch_sprintf("Thread %llu Kernel", selected_thread->tid).ptr;
+
+			spec.Offset = selected_thread->history.offset;
+			spec.Stride = sizeof(thread_base[0]);
+
+			spec.LineColor = thread_cpu_color;
+			ImPlot::PlotLine(thread_cpu_label, &thread_base->time, &thread_base->cpu, thread_length, spec);
+			spec.LineColor = thread_kernel_color;
+			ImPlot::PlotLine(thread_kernel_label, &thread_base->time, &thread_base->kernel, thread_length, spec);
+
+			scratch_end();
+		}
 
 		ImPlot::EndPlot();
 	}
@@ -486,9 +732,11 @@ internal void tab_process(ProcessData* process) {
 
 		ImPlot::EndPlot();
 	}
+
+	selected_thread = thread_table(process, polling_changes);
 }
 
-internal void process_tabs() {
+internal void process_tabs(bool polling_changes) {
 	local_persist Arena arena = arena_create(1 * GIGABYTE);
 	local_persist ProcessTab* tabs_head = NULL;
 	local_persist ProcessTab* tabs_tail = NULL;
@@ -563,7 +811,7 @@ internal void process_tabs() {
 			&tab->open,
 			(tab == opening) ? ImGuiTabItemFlags_SetSelected : 0
 		)) {
-			tab_process(process);
+			tab_process(process, polling_changes);
 			ImGui::EndTabItem();
 		}
 
@@ -590,8 +838,11 @@ internal void do_ui() {
 		ImGuiWindowFlags_NoMove                |
 		ImGuiWindowFlags_NoCollapse            |
 		ImGuiWindowFlags_NoBringToFrontOnFocus |
-		ImGuiWindowFlags_NoNavFocus
+		ImGuiWindowFlags_NoNavFocus            |
+		0
 	);
+
+	bool polling_changes = polling_check_for_changes();
 
 	if (ImGui::BeginTabBar(
 		"Tabs",
@@ -600,14 +851,14 @@ internal void do_ui() {
 		ImGuiTabBarFlags_TabListPopupButton
 	)) {
 		if (ImGui::BeginTabItem("Processes")) {
-			tab_processes();
+			tab_processes(polling_changes);
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Performance")) {
 			tab_performance();
 			ImGui::EndTabItem();
 		}
-		process_tabs();
+		process_tabs(polling_changes);
 		ImGui::EndTabBar();
 	}
 

@@ -104,6 +104,21 @@ api_method View<ProcessData*> polling_collect_processes(Arena* arena) {
 	return output;
 }
 
+api_method View<ThreadData*>  polling_collect_threads(Arena* arena, ProcessData* process) {
+	View<ThreadData*> output = {.len = process->threads.count};
+	alloc_array(arena, &output);
+
+	u64 idx = 0;
+	ThreadData* thread = process->threads.head;
+	while (idx < output.len && thread) {
+		output[idx++] = thread;
+		thread        = thread->next;
+	}
+	output.len = idx;
+
+	return output;
+}
+
 internal u32 WINCALLBACK polling_thread(void* param) {
 	unused_var(param);
 
@@ -355,8 +370,8 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 					f64 user_pct   = ((f64)user_diff   / cpu_total) * 100;
 					f64 kernel_pct = ((f64)kernel_diff / cpu_total) * 100;
 
-					u64 total_ram    = sys_basic_info.number_of_physical_pages * sys_basic_info.page_size;
-					u64 commit_limit = sys_perf_info.commit_limit * sys_basic_info.page_size;
+					u64 total_ram    = (u64)sys_basic_info.number_of_physical_pages * sys_basic_info.page_size;
+					u64 commit_limit = (u64)sys_perf_info.commit_limit              * sys_basic_info.page_size;
 					f64 ram_pct      = ((f64)process->ram    / total_ram)    * 100;
 					f64 commit_pct   = ((f64)process->commit / commit_limit) * 100;
 
@@ -425,10 +440,44 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 						thread->history.length = 0;
 					}
 
-					thread->uptime      = (f64)(thread_info->create_time - system_time)            / ticks_per_second;
+					thread->uptime      = (f64)(system_time - thread_info->create_time)            / ticks_per_second;
 					thread->user_time   = (f64)(thread_info->user_time)                            / ticks_per_second;
 					thread->kernel_time = (f64)(thread_info->kernel_time)                          / ticks_per_second;
 					thread->cpu_time    = (f64)(thread_info->user_time + thread_info->kernel_time) / ticks_per_second;
+
+					thread->context_switches = thread_info->context_switches;
+
+					if (!init_thread) { // We have a previous tick for an interval
+						u64 user_diff        = thread_info->user_time   - thread->user_cpu_last;
+						u64 kernel_diff      = thread_info->kernel_time - thread->kernel_cpu_last;
+						u64 system_time_diff = system_time              - thread->system_time_last;
+						u64 cpu_diff         = user_diff + kernel_diff;
+						u64 cpu_total        = system_time_diff * sys_basic_info.number_of_processors;
+						thread->cpu_pct     = ((f64)cpu_diff / cpu_total) * 100;
+
+						f64 cpu_pct    = ((f64)cpu_diff    / cpu_total) * 100;
+						f64 user_pct   = ((f64)user_diff   / cpu_total) * 100;
+						f64 kernel_pct = ((f64)kernel_diff / cpu_total) * 100;
+
+						u64 index = (thread->history.offset + thread->history.length) % arrlen(thread->history.buffer);
+						thread->history.buffer[index].time   = process->uptime; // Still based on process time for plot
+						thread->history.buffer[index].cpu    = cpu_pct;
+						thread->history.buffer[index].user   = user_pct;
+						thread->history.buffer[index].kernel = kernel_pct;
+
+						if (thread->history.length < arrlen(thread->history.buffer)) {
+							thread->history.length++;
+						} else {
+							thread->history.offset = (thread->history.offset + 1) % arrlen(thread->history.buffer);
+						}
+
+						thread->history.start = process->uptime - 300.0;
+						thread->history.end   = process->uptime;
+					}
+
+					thread->system_time_last = system_time;
+					thread->user_cpu_last    = thread_info->user_time;
+					thread->kernel_cpu_last  = thread_info->kernel_time;
 
 					thread->touched = true;
 				}

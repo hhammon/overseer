@@ -85,8 +85,13 @@ struct ThreadData {
 	f64           cpu_time;
 	f64           user_time;
 	f64           kernel_time;
-	f64           cpu_pct_last;
+	f64           cpu_pct;
+	u64           context_switches;
 	ThreadHistory history;
+	u64           system_time_last; // Internal
+	u64           user_cpu_last;    // Internal
+	u64           kernel_cpu_last;  // Internal
+
 	b8            touched; // Internal flag
 };
 
@@ -135,5 +140,6 @@ api_method CpuHistory    polling_get_cpu_history();
 api_method MemoryHistory polling_get_memory_history();
 
 api_method View<ProcessData*> polling_collect_processes(Arena* arena);
+api_method View<ThreadData*>  polling_collect_threads  (Arena* arena, ProcessData* process);
 
 #endif // __POLLING_HPP__
