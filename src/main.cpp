@@ -1039,6 +1039,8 @@ internal void process_tabs(bool polling_changes) {
 
 	opening_tab_process = NULL;
 
+	scratch_begin();
+
 	tab = tabs_head;
 	while (tab) {
 		ProcessTab* next_tab = tab->next;
@@ -1051,14 +1053,16 @@ internal void process_tabs(bool polling_changes) {
 		)) {
 			if (ImGui::BeginChild("ProcessesBody")) {
 				tab_process(process, polling_changes);
-				ImGui::EndChild();
 			}
+			ImGui::EndChild();
 
 			ImGui::EndTabItem();
 		}
 
 		tab = next_tab;
 	}
+
+	scratch_end();
 }
 
 internal void do_ui() {
@@ -1095,15 +1099,15 @@ internal void do_ui() {
 		if (ImGui::BeginTabItem("Processes")) {
 			if (ImGui::BeginChild("ProcessesBody")) {
 				tab_processes(polling_changes);
-				ImGui::EndChild();
 			}
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Performance")) {
 			if (ImGui::BeginChild("ProcessesBody")) {
 				tab_performance();
-				ImGui::EndChild();
 			}
+			ImGui::EndChild();
 			ImGui::EndTabItem();
 		}
 		process_tabs(polling_changes);
