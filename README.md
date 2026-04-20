@@ -1,1 +1,1 @@
-This is my submission to the [Handmade Essential Jam 2026](https://handmade.network/jam/essentials). Its project page can be found [here](https://handmade.network/p/790/overseer/).
+This is my submission to the [Handmade Essentials Jam 2026](https://handmade.network/jam/essentials). Its project page can be found [here](https://handmade.network/p/790/overseer/).
