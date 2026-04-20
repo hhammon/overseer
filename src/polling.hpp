@@ -112,7 +112,12 @@ struct ProcessData {
 	f64            user_time;
 	f64            kernel_time;
 	f64            cpu_time;
+	f64            user_pct;
+	f64            kernel_pct;
 	f64            cpu_pct;
+	f64            user_pct_tick;
+	f64            kernel_pct_tick;
+	f64            cpu_pct_tick;
 	u64            ram;
 	u64            commit;
 	u64            hard_fault_count;
@@ -132,6 +137,47 @@ struct ProcessList {
 	u64          count;
 };
 
+struct SystemInfo {
+	u64 cpu_count;
+	f64 uptime;
+	f64 cpu_time;
+	f64 user_time;
+	f64 kernel_time;
+	f64 interrupt_time;
+	f64 dpc_time;
+	f64 idle_time;
+	f64 cpu_pct;
+	f64 user_pct;
+	f64 kernel_pct;
+	f64 interrupt_pct;
+	f64 dpc_pct;
+	f64 idle_pct;
+	f64 cpu_pct_tick;
+	f64 user_pct_tick;
+	f64 kernel_pct_tick;
+	f64 interrupt_pct_tick;
+	f64 dpc_pct_tick;
+	f64 idle_pct_tick;
+	u64 ram_size;
+	u64 ram_used;
+	f64 ram_pct;
+	u64 page_file_min;
+	u64 page_file_max;
+	u64 page_file_size;
+	u64 page_file_used;
+	f64 page_file_pct;
+	u64 commit_limit;
+	u64 commit_used;
+	f64 commit_pct;
+	u64 system_calls;
+	u64 system_calls_tick;
+	u64 context_switches;
+	u64 context_switches_tick;
+	u64 processes;
+	u64 threads;
+	u64 handles;
+};
+
 api_method void polling_begin();
 api_method void polling_end();
 api_method bool polling_check_for_changes();
@@ -141,5 +187,7 @@ api_method MemoryHistory polling_get_memory_history();
 
 api_method View<ProcessData*> polling_collect_processes(Arena* arena);
 api_method View<ThreadData*>  polling_collect_threads  (Arena* arena, ProcessData* process);
+
+api_method SystemInfo* polling_get_system_info();
 
 #endif // __POLLING_HPP__

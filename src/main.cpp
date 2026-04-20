@@ -83,6 +83,14 @@ internal StringZ format_timespan(f64 secs, Arena* arena) {
 }
 #define scratch_format_timespan(secs) format_timespan(secs, &scratch_arena)
 
+internal void system_info_row(String name, String value) {
+	ImGui::TableNextRow();
+	ImGui::TableSetColumnIndex(0);
+	imgui_string(name);
+	ImGui::TableSetColumnIndex(1);
+	imgui_string(value);
+}
+
 internal void tab_performance() {
 	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
 		CpuHistory   cpu_history = polling_get_cpu_history();
@@ -133,6 +141,145 @@ internal void tab_performance() {
 		ImPlot::PlotLine("Commit", &base->time, &base->commit, length, spec);
 
 		ImPlot::EndPlot();
+	}
+
+	SystemInfo* system_info = polling_get_system_info();
+	if (ImGui::BeginTable("SystemInfo", 2, ImGuiTableFlags_SizingFixedFit)) {
+		scratch_begin();
+
+		system_info_row(
+			S("Logical Processors"),
+			scratch_sprintf("%llu", system_info->cpu_count)
+		);
+		system_info_row(
+			S("Up Time"),
+			scratch_format_timespan(system_info->uptime)
+		);
+		system_info_row(
+			S("CPU Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->cpu_time).ptr,
+				system_info->cpu_pct
+			)
+		);
+		system_info_row(
+			S("User Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->user_time).ptr,
+				system_info->user_pct
+			)
+		);
+		system_info_row(
+			S("Kernel Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->kernel_time).ptr,
+				system_info->kernel_pct
+			)
+		);
+		system_info_row(
+			S("Interrupt Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->interrupt_time).ptr,
+				system_info->interrupt_pct
+			)
+		);
+		system_info_row(
+			S("Deferred Procedure Call Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->dpc_time).ptr,
+				system_info->dpc_pct
+			)
+		);
+		system_info_row(
+			S("Idle Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(system_info->idle_time).ptr,
+				system_info->idle_pct
+			)
+		);
+		system_info_row(
+			S("Current CPU Utilization"),
+			scratch_sprintf(
+				"%.2lf%% (User: %.2lf%%, Kernel: %.2lf%%, Interrupt: %.2lf%%, DPC: %.2lf%%)",
+				system_info->cpu_pct_tick,
+				system_info->user_pct_tick,
+				system_info->kernel_pct_tick,
+				system_info->interrupt_pct_tick,
+				system_info->dpc_pct_tick
+			)
+		);
+		system_info_row(
+			S("RAM"),
+			scratch_sprintf(
+				"%_$$llu / %_$$llu (%.2lf%%)",
+				system_info->ram_used,
+				system_info->ram_size,
+				system_info->ram_pct
+			)
+		);
+		system_info_row(
+			S("Page File"),
+			scratch_sprintf(
+				"%_$$llu / %_$$llu (%.2lf%%)",
+				system_info->page_file_used,
+				system_info->page_file_size,
+				system_info->page_file_pct
+			)
+		);
+		system_info_row(
+			S("Commit Charge"),
+			scratch_sprintf(
+				"%_$$llu / %_$$llu (%.2lf%%)",
+				system_info->commit_used,
+				system_info->commit_limit,
+				system_info->commit_pct
+			)
+		);
+		// system_info_row(
+		// 	S("Page File Bounds (Min - Max)"),
+		// 	scratch_sprintf(
+		// 		"%_$$llu - %_$$llu",
+		// 		system_info->page_file_min,
+		// 		system_info->page_file_max
+		// 	)
+		// );
+		system_info_row(
+			S("Processes"),
+			scratch_sprintf("%llu", system_info->processes)
+		);
+		system_info_row(
+			S("Threads"),
+			scratch_sprintf("%llu", system_info->threads)
+		);
+		system_info_row(
+			S("Handles"),
+			scratch_sprintf("%llu", system_info->handles)
+		);
+		system_info_row(
+			S("System Calls"),
+			scratch_sprintf(
+				"%llu (+%llu)",
+				system_info->system_calls,
+				system_info->system_calls_tick
+			)
+		);
+		system_info_row(
+			S("Context Switches"),
+			scratch_sprintf(
+				"%llu (+%llu)",
+				system_info->context_switches,
+				system_info->context_switches_tick
+			)
+		);
+
+		scratch_end();
+		ImGui::EndTable();
 	}
 }
 
@@ -192,10 +339,10 @@ internal int __cdecl proc_cmp_pid_desc(ProcessData** a, ProcessData** b) {
 }
 
 internal int __cdecl proc_cmp_cpu_asc(ProcessData** a, ProcessData** b) {
-	return cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
+	return cmp_f64((*a)->cpu_pct_tick, (*b)->cpu_pct_tick);
 }
 internal int __cdecl proc_cmp_cpu_desc(ProcessData** a, ProcessData** b) {
-	return -cmp_f64((*a)->cpu_pct, (*b)->cpu_pct);
+	return -cmp_f64((*a)->cpu_pct_tick, (*b)->cpu_pct_tick);
 }
 
 internal int __cdecl proc_cmp_ram_asc(ProcessData** a, ProcessData** b) {
@@ -411,7 +558,7 @@ internal void tab_processes(bool polling_changes) {
 						imgui_printf_right("%llu", process->pid);
 					} break;
 					case ProcessTableColumn_CPU: {
-						imgui_printf_right("%05.2lf%%", process->cpu_pct);
+						imgui_printf_right("%05.2lf%%", process->cpu_pct_tick);
 					} break;
 					case ProcessTableColumn_RAM: {
 						imgui_printf_right("%_$$llu", process->ram);
@@ -502,7 +649,7 @@ internal int thread_cmp_context_switches_desc(ThreadData** a, ThreadData** b) {
 }
 
 internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
-	local_persist ThreadData* selected_thread = NULL;
+	local_persist ThreadData* selected_thread     = NULL;
 	local_persist s64         pid                 = -1;
 	local_persist u64         process_create_time =  0;
 
@@ -572,7 +719,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 		ImGuiTableFlags_BordersOuter           |
 		ImGuiTableFlags_BordersV               |
 		ImGuiTableFlags_SizingFixedFit         |
-		ImGuiTableFlags_ScrollX                |
+		// ImGuiTableFlags_ScrollX                |
 		ImGuiTableFlags_HighlightHoveredColumn |
 		ImGuiTableFlags_Sortable               |
 		0
@@ -733,6 +880,97 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 		ImPlot::EndPlot();
 	}
 
+	if (ImGui::Button("Kill")) {
+		debug_log("Killing PID %llu", process->pid);
+
+		Handle process_handle = OpenProcess(ProcessAccessFlag_TERMINATE, false, process->pid);
+		if (process_handle) {
+			b32 terminate_result = TerminateProcess(process_handle, 1);
+
+			if (!terminate_result) {
+				debug_log("Failed to kill process");
+			}
+		} else {
+			debug_log("Failed to open handle");
+		}
+	}
+
+	SystemInfo* system_info = polling_get_system_info();
+	if (ImGui::BeginTable("SystemInfo", 2, ImGuiTableFlags_SizingFixedFit)) {
+		scratch_begin();
+
+		system_info_row(
+			S("Process"),
+			scratch_sprintf("%s (PID: %llu)", process->image_name, process->pid)
+		);
+		system_info_row(
+			S("Up Time"),
+			scratch_format_timespan(process->uptime)
+		);
+		system_info_row(
+			S("CPU Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(process->cpu_time).ptr,
+				process->cpu_pct
+			)
+		);
+		system_info_row(
+			S("User Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(process->user_time).ptr,
+				process->user_pct
+			)
+		);
+		system_info_row(
+			S("Kernel Time"),
+			scratch_sprintf(
+				"%s (%.2lf%%)",
+				scratch_format_timespan(process->kernel_time).ptr,
+				process->kernel_pct
+			)
+		);
+		system_info_row(
+			S("Current CPU Utilization"),
+			scratch_sprintf(
+				"%.2lf%% (User: %.2lf%%, Kernel: %.2lf%%)",
+				process->cpu_pct_tick,
+				process->user_pct_tick,
+				process->kernel_pct_tick
+			)
+		);
+		system_info_row(
+			S("RAM"),
+			scratch_sprintf(
+				"%_$$llu / %_$$llu (%.2lf%%)",
+				process->ram,
+				system_info->ram_size,
+				(f64)process->ram / system_info->ram_size * 100
+			)
+		);
+		system_info_row(
+			S("Commit Charge"),
+			scratch_sprintf(
+				"%_$$llu / %_$$llu (%.2lf%%)",
+				process->commit,
+				system_info->commit_limit,
+				(f64)process->commit / system_info->commit_limit * 100
+			)
+		);
+		system_info_row(
+			S("Threads"),
+			scratch_sprintf("%llu", process->threads.count)
+		);
+		system_info_row(
+			S("Handles"),
+			scratch_sprintf("%llu", process->handle_count)
+		);
+
+		ImGui::EndTable();
+		scratch_end();
+	}
+
 	selected_thread = thread_table(process, polling_changes);
 }
 
@@ -811,7 +1049,11 @@ internal void process_tabs(bool polling_changes) {
 			&tab->open,
 			(tab == opening) ? ImGuiTabItemFlags_SetSelected : 0
 		)) {
-			tab_process(process, polling_changes);
+			if (ImGui::BeginChild("ProcessesBody")) {
+				tab_process(process, polling_changes);
+				ImGui::EndChild();
+			}
+
 			ImGui::EndTabItem();
 		}
 
@@ -851,11 +1093,17 @@ internal void do_ui() {
 		ImGuiTabBarFlags_TabListPopupButton
 	)) {
 		if (ImGui::BeginTabItem("Processes")) {
-			tab_processes(polling_changes);
+			if (ImGui::BeginChild("ProcessesBody")) {
+				tab_processes(polling_changes);
+				ImGui::EndChild();
+			}
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Performance")) {
-			tab_performance();
+			if (ImGui::BeginChild("ProcessesBody")) {
+				tab_performance();
+				ImGui::EndChild();
+			}
 			ImGui::EndTabItem();
 		}
 		process_tabs(polling_changes);

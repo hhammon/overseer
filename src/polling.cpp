@@ -20,10 +20,10 @@ global u64            memory_history_count = 0;
 
 // Doubly-linked list of all processes
 global ProcessList  processes         = { };
-global u32          thread_count      = 0;
-global u32          handle_count      = 0;
 global ProcessData* process_free_list = NULL;
 global ThreadData*  thread_free_list  = NULL;
+
+global SystemInfo system_info = { };
 
 internal u32 WINCALLBACK polling_thread(void* param);
 
@@ -119,6 +119,10 @@ api_method View<ThreadData*>  polling_collect_threads(Arena* arena, ProcessData*
 	return output;
 }
 
+api_method SystemInfo* polling_get_system_info() {
+	return &system_info;
+}
+
 internal u32 WINCALLBACK polling_thread(void* param) {
 	unused_var(param);
 
@@ -134,6 +138,9 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 		&basic_info_return_size
 	);
 	assert(basic_info_return_size >= sizeof(sys_basic_info));
+
+	system_info.cpu_count = sys_basic_info.number_of_processors;
+	system_info.ram_size  = (u64)sys_basic_info.number_of_physical_pages * sys_basic_info.page_size;
 
 	View<SystemProcessorPerformanceInformation> cpu_stats = {
 		.len = (u64)sys_basic_info.number_of_processors * 2 // Alloc last and current together
@@ -159,6 +166,41 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			&sys_cpu_stats_return_size
 		);
 
+		{
+			// System Info
+			u64 user      = 0;
+			u64 kernel    = 0;
+			u64 idle      = 0;
+			u64 interrupt = 0;
+			u64 dpc       = 0;
+			for (u64 i = 0; i < cpu_stats.len; i++) {
+				user      += cpu_stats[i].user_time;
+				kernel    += cpu_stats[i].kernel_time;
+				idle      += cpu_stats[i].idle_time;
+				interrupt += cpu_stats[i].interrupt_time;
+				dpc       += cpu_stats[i].dpc_time;
+			}
+			u64 total = user + kernel; // kernel is all non-user time.
+			kernel -= idle;
+			u64 cpu = total - idle;
+
+			u64 ticks_per_second = 10'000'000;
+
+			system_info.uptime         = (f64)total     / ticks_per_second / system_info.cpu_count;
+			system_info.cpu_time       = (f64)cpu       / ticks_per_second;
+			system_info.user_time      = (f64)user      / ticks_per_second;
+			system_info.kernel_time    = (f64)kernel    / ticks_per_second;
+			system_info.interrupt_time = (f64)interrupt / ticks_per_second;
+			system_info.dpc_time       = (f64)dpc       / ticks_per_second;
+			system_info.idle_time      = (f64)idle      / ticks_per_second;
+			system_info.cpu_pct        = (f64)cpu       / total * 100;
+			system_info.user_pct       = (f64)user      / total * 100;
+			system_info.kernel_pct     = (f64)kernel    / total * 100;
+			system_info.interrupt_pct  = (f64)interrupt / total * 100;
+			system_info.dpc_pct        = (f64)dpc       / total * 100;
+			system_info.idle_pct       = (f64)idle      / total * 100;
+		}
+
 		if (poll_count) {
 			// We have stats for before and can get an interval of data.
 			u64 user      = 0;
@@ -178,7 +220,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			u64 cpu = total - idle;
 
 			CpuPercents percents = {
-				.time      = (f64)(poll_count - 1),
+				.time      = system_info.uptime,
 				.cpu       = ((f64)cpu       / total) * 100.0f,
 				.user      = ((f64)user      / total) * 100.0f,
 				.kernel    = ((f64)kernel    / total) * 100.0f,
@@ -194,6 +236,13 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			} else {
 				cpu_history_start = (cpu_history_start + 1) % arrlen(cpu_history);
 			}
+
+			system_info.cpu_pct_tick       = percents.cpu;
+			system_info.user_pct_tick      = percents.user;
+			system_info.kernel_pct_tick    = percents.kernel;
+			system_info.interrupt_pct_tick = percents.interrupt;
+			system_info.dpc_pct_tick       = percents.dpc;
+			system_info.idle_pct_tick      = percents.idle;
 		}
 
 		swap_vars(cpu_stats, cpu_stats_last);
@@ -223,7 +272,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			u32 ram_used_pages = sys_basic_info.number_of_physical_pages - sys_perf_info.available_pages;
 
 			MemoryPercents percents = {
-				.time   = (f64)(poll_count),
+				.time   = system_info.uptime,
 				.ram    = ((f64)ram_used_pages                   / sys_basic_info.number_of_physical_pages) * 100.0,
 				.swap   = ((f64)page_file_info.info.total_in_use / page_file_info.info.total_size)          * 100.0,
 				.commit = ((f64)sys_perf_info.committed_pages    / sys_perf_info.commit_limit)              * 100.0,
@@ -236,10 +285,29 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			} else {
 				memory_history_start = (memory_history_start + 1) % arrlen(memory_history);
 			}
+
+			system_info.ram_used       = (u64)ram_used_pages                   * sys_basic_info.page_size;
+			system_info.page_file_min  = (u64)page_file_info.minimum_size      * sys_basic_info.page_size;
+			system_info.page_file_max  = (u64)page_file_info.maximum_size      * sys_basic_info.page_size;
+			system_info.page_file_size = (u64)page_file_info.info.total_size   * sys_basic_info.page_size;
+			system_info.page_file_used = (u64)page_file_info.info.total_in_use * sys_basic_info.page_size;
+			system_info.commit_limit   = (u64)sys_perf_info.commit_limit       * sys_basic_info.page_size;
+			system_info.commit_used    = (u64)sys_perf_info.committed_pages    * sys_basic_info.page_size;
+
+			system_info.ram_pct       = percents.ram;
+			system_info.page_file_pct = percents.swap;
+			system_info.commit_pct    = percents.commit;
+
+			if (poll_count) {
+				system_info.system_calls_tick     = sys_perf_info.system_calls     - system_info.system_calls;
+				system_info.context_switches_tick = sys_perf_info.context_switches - system_info.context_switches;
+			}
+			system_info.system_calls     = sys_perf_info.system_calls;
+			system_info.context_switches = sys_perf_info.context_switches;
 		}
 
 		{
-			// Processes... Is this the place to do it?
+			// Processes
 
 			SystemProcessInformation* proc_info      = NULL;
 			u32                       proc_info_size = 0;
@@ -276,14 +344,12 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			GetSystemTimeAsFileTime(&system_time);
 
 			processes.count = 0;
-			thread_count    = 0;
-			handle_count    = 0;
-			unused_var(thread_count);
-			unused_var(handle_count);
+			system_info.threads = 0;
+			system_info.handles = 0;
 			for (;;) {
 				processes.count++;
-				thread_count += proc_info->number_of_threads;
-				handle_count += proc_info->handle_count;
+				system_info.threads += proc_info->number_of_threads;
+				system_info.handles += proc_info->handle_count;
 
 				ProcessData* process = process_map[proc_info->unique_process_id];
 				bool init_process = false;
@@ -354,17 +420,20 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				process->kernel_time = (f64)(proc_info->kernel_time)                        / ticks_per_second;
 				process->cpu_time    = (f64)(proc_info->user_time + proc_info->kernel_time) / ticks_per_second;
 
+				process->user_pct   = process->user_time   / process->uptime / system_info.cpu_count * 100;
+				process->kernel_pct = process->kernel_time / process->uptime / system_info.cpu_count * 100;
+				process->cpu_pct    = process->cpu_time    / process->uptime / system_info.cpu_count * 100;
+
 				process->ram              = proc_info->working_set_private_size;
 				process->commit           = proc_info->private_page_count;
 				process->hard_fault_count = proc_info->hard_fault_count;
 
 				if (!init_process) { // We have a previous tick for an interval
-					u64 user_diff        = proc_info->user_time   - process->user_cpu_last;
-					u64 kernel_diff      = proc_info->kernel_time - process->kernel_cpu_last;
-					u64 system_time_diff = system_time            - process->system_time_last;
-					u64 cpu_diff         = user_diff + kernel_diff;
-					u64 cpu_total        = system_time_diff * sys_basic_info.number_of_processors;
-					process->cpu_pct     = ((f64)cpu_diff / cpu_total) * 100;
+					u64 user_diff         = proc_info->user_time   - process->user_cpu_last;
+					u64 kernel_diff       = proc_info->kernel_time - process->kernel_cpu_last;
+					u64 system_time_diff  = system_time            - process->system_time_last;
+					u64 cpu_diff          = user_diff + kernel_diff;
+					u64 cpu_total         = system_time_diff * sys_basic_info.number_of_processors;
 
 					f64 cpu_pct    = ((f64)cpu_diff    / cpu_total) * 100;
 					f64 user_pct   = ((f64)user_diff   / cpu_total) * 100;
@@ -374,6 +443,10 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 					u64 commit_limit = (u64)sys_perf_info.commit_limit              * sys_basic_info.page_size;
 					f64 ram_pct      = ((f64)process->ram    / total_ram)    * 100;
 					f64 commit_pct   = ((f64)process->commit / commit_limit) * 100;
+
+					process->cpu_pct_tick    = cpu_pct;
+					process->user_pct_tick   = user_pct;
+					process->kernel_pct_tick = kernel_pct;
 
 					u64 index = (process->history.offset + process->history.length) % arrlen(process->history.buffer);
 					process->history.buffer[index].time   = process->uptime;
@@ -546,6 +619,8 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				process->touched = false;
 				process = next_process;
 			}
+
+			system_info.processes = processes.count;
 
 			scratch_end();
 		}
