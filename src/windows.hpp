@@ -729,6 +729,14 @@ DLLIMPORT b32 CloseHandle(
 );
 
 /**
+ * https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-loadiconw
+ */
+DLLIMPORT HIcon WINAPI LoadIconW(
+	HInstance instance,
+	wchar_t*  icon_name
+);
+
+/**
  * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-exitprocess
  */
 DLLIMPORT void WINAPI ExitProcess(

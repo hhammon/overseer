@@ -1140,11 +1140,12 @@ int WINAPI wWinMain(
 
 	// Create window
 	WndClassExW wnd_class = { };
-	wnd_class.size = sizeof(wnd_class);
-	wnd_class.style = CS_CLASSDC;
-	wnd_class.wnd_proc = wnd_proc;
-	wnd_class.instance = instance;
-	wnd_class.class_name = L"Overseer Window";
+	wnd_class.size        = sizeof(wnd_class);
+	wnd_class.style       = CS_CLASSDC;
+	wnd_class.wnd_proc    = wnd_proc;
+	wnd_class.instance    = instance;
+	wnd_class.class_name  = L"Overseer Window";
+	wnd_class.icon        = LoadIconW(instance, L"MAINICON");
 	RegisterClassExW(&wnd_class);
 	window = CreateWindowExW(
 		0,
