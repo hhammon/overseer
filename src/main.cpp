@@ -711,7 +711,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 
 	ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, ImVec2(4.0f, 4.0f));
 	if (ImGui::BeginTable(
-		scratch_sprintf("ThreadTable##%llu", process->pid).ptr,
+		"ThreadTable",
 		ThreadTableColumn__COUNT,
 		ImGuiTableFlags_Resizable              |
 		ImGuiTableFlags_Reorderable            |

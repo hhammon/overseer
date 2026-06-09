@@ -123,6 +123,38 @@ api_method SystemInfo* polling_get_system_info() {
 	return &system_info;
 }
 
+internal void debug_check_for_cycles() {
+	debug_only {
+		ProcessData* p_tortoise = processes.head;
+		ProcessData* p_hare     = processes.head;
+
+		while (p_hare && p_hare->next) {
+			p_tortoise = p_tortoise->next;
+			p_hare     = p_hare->next->next;
+
+			if (p_tortoise == p_hare) {
+				debug_log("Cycle found in processes");
+				asm volatile ("int3");
+			}
+		}
+
+		for (ProcessData* process = processes.head; process; process = process->next) {
+			ThreadData* t_tortoise = process->threads.head;
+			ThreadData* t_hare     = process->threads.head;
+
+			while (t_hare && t_hare->next) {
+				t_tortoise = t_tortoise->next;
+				t_hare     = t_hare->next->next;
+
+				if (t_tortoise == t_hare) {
+					debug_log("Cycle found in process threads for PID %llu", process->pid);
+					asm volatile ("int3");
+				}
+			}
+		}
+	}
+}
+
 internal u32 WINCALLBACK polling_thread(void* param) {
 	unused_var(param);
 
@@ -308,6 +340,7 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 		{
 			// Processes
+			debug_check_for_cycles();
 
 			SystemProcessInformation* proc_info      = NULL;
 			u32                       proc_info_size = 0;
@@ -489,9 +522,23 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 						thread_map[thread_info->client_id.unique_thread] = thread;
 					} else if (
-						thread->create_time  != thread_info->create_time &&
+						thread->create_time  != thread_info->create_time ||
 						thread->process->pid != thread_info->client_id.unique_process
 					) {
+						// The thread has exited and another thread spawned with same ID in process
+						// between two consecutive ticks. Remove from previous process and init.
+						if (thread->prev) {
+							thread->prev->next = thread->next;
+						} else {
+							thread->process->threads.head = thread->next;
+						}
+
+						if (thread->next) {
+							thread->next->prev = thread->prev;
+						} else {
+							thread->process->threads.tail = thread->prev;
+						}
+
 						init_thread = true;
 					}
 
@@ -563,12 +610,15 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 				proc_info = (SystemProcessInformation*)((u8*)proc_info + proc_info->next_entry_offset);
 			}
 
+			debug_check_for_cycles();
+
 			// Remove everything untouched
 			ProcessData* process = processes.head;
 			while (process) {
 				ProcessData* next_process = process->next;
 
 				ThreadData* thread = process->threads.head;
+
 				while (thread) {
 					ThreadData* next_thread = thread->next;
 
@@ -623,6 +673,8 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 			system_info.processes = processes.count;
 
 			scratch_end();
+
+			debug_check_for_cycles();
 		}
 
 		poll_count++;
