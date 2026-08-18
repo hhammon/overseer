@@ -880,6 +880,11 @@ DLLIMPORT b32 WINAPI VirtualFree(
 );
 
 /**
+ * https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-localfree
+ */
+DLLIMPORT void* WINAPI LocalFree(void* mem);
+
+/**
  * https://learn.microsoft.com/en-us/windows/win32/api/debugapi/nf-debugapi-outputdebugstringa
  */
 DLLIMPORT void WINAPI OutputDebugStringA(

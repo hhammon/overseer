@@ -10,11 +10,10 @@ window:
   size: 1536.000000 864.000000
   panels:
   {
-    0.373761:
+    0.375648:
     {
-      0.638033:
+      0.503705:
       {
-        selected
         watch:
         {
           selected
@@ -24,16 +23,11 @@ window:
           watch: region
           watch: ""
           normal: 0.440774 0.559226
-          watch_expression: expression: "(*a).description_len"
-          watch_expression: expression: "(*a).description"
-          watch_expression: expression: "(*b).description_len"
-          watch_expression: expression: "(*b).description"
-          watch_expression: expression: a
         }
         watch: expression: "query:types"
         watch: expression: "query:locals"
       }
-      0.361965:
+      0.496293:
       {
         watch: expression: "query:breakpoints"
         watch:
@@ -46,25 +40,48 @@ window:
         watch: expression: "query:threads"
       }
     }
-    0.626239:
+    0.624350:
     {
-      text:
-      {
-        expression: "query:output"
-        cursor: 0x28f4
-        mark: 0x28db
-        query: input: OUTPUT_DEBUG_STRING_EVENT
-      }
+      selected
       watch: expression: "query:processes"
-      disasm: query: input: ""
       text:
       {
-        selected
         expression: "file:\"H:/overseer/src/main.cpp\".data"
         project: "H:/overseer/overseer.raddebugger"
         query: input: ""
-        cursor: 0x4c35
-        mark: 0x4c35
+        cursor: 0x4872
+        mark: 0x4872
+      }
+      text:
+      {
+        selected
+        expression: "file:\"H:/finance-app-web/src/app.cpp\".data"
+        auto: 1
+        project: ""
+        query: input: ""
+        cursor: 0x5e
+        mark: 0x5e
+        cursor_line: 1
+        cursor_column: 1
+        mark_line: 1
+        mark_column: 1
+      }
+      text:
+      {
+        expression: "query:output"
+        cursor: 0x2e9
+        mark: 0x2e9
+        query: input: ""
+        scroll_to_bottom_on_change: 1
+      }
+      disasm: query: input: ""
+      text:
+      {
+        expression: "file:\"H:/finance-app-web/src/host_windows.cpp\".data"
+        project: ""
+        query: input: ""
+        cursor: 0x0
+        mark: 0x0
       }
     }
   }
@@ -193,7 +210,7 @@ keybindings:
   { log_marker m ctrl shift alt }
   { toggle_dev_menu d ctrl shift alt }
 }
-current_path: "H:/overseer"
+current_path: "H:/finance-app-web/src"
 debug_info:
 {
   path: "H:/overseer/build/overseer.pdb"
@@ -217,4 +234,39 @@ debug_info:
   path: "C:/SymbolCache/kernelbase.pdb/53B51385668728BA4297C9C78EEC92DD1/kernelbase.pdb"
   timestamp: 66219413105335
   project: "H:/overseer/overseer.raddebugger"
+}
+breakpoint:
+{
+  project: ""
+  source_location: "../finance-app-web/src/host_windows.cpp:235:1"
+}
+debug_info:
+{
+  path: "H:/finance-app-web/build/dll_host.pdb"
+  timestamp: 66223272882689
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/ntdll.pdb/180BF1B90AA75697D0EFEA5E5630AC7E1/ntdll.pdb"
+  timestamp: 66219413102160
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernel32.pdb/E02F64ED8DA50EC6E7691C0AC0BC25781/kernel32.pdb"
+  timestamp: 66219413090478
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernelbase.pdb/53B51385668728BA4297C9C78EEC92DD1/kernelbase.pdb"
+  timestamp: 66219413105335
+  project: ""
+}
+debug_info:
+{
+  path: "H:/finance-app-web/build/app.pdb"
+  timestamp: 66223272880458
+  project: ""
 }

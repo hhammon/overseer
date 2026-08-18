@@ -596,6 +596,8 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 								}
 							}
 						}
+
+						LocalFree(description_w);
 					} else {
 						thread->description_len = 0;
 						thread->description[0]  = '\0';
