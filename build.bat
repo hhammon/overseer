@@ -23,8 +23,8 @@ for /D %%d in ("../src/third_party/*") do (
 set WARNINGS=-Wall -Wextra -Werror -Wno-unused-function -Wno-switch -Wno-gnu-alignof-expression -Wno-writable-strings ^
 -Wno-missing-declarations -Wno-missing-field-initializers
 
-@REM clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O0 -g -DBUILD_DEBUG=1 %WARNINGS%
-clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O3 -DBUILD_DEBUG=0 %WARNINGS%
+clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O0 -g -DBUILD_DEBUG=1 %WARNINGS%
+@REM clang++ -c -o overseer.o -I../src %THIRD_PARTY_INCLUDES% ../src/main.cpp -O3 -DBUILD_DEBUG=0 %WARNINGS%
 rc /nologo /fo logo.res ..\data\logo.rc
 link /nologo /OUT:overseer.exe overseer.o logo.res %THIRD_PARTY_OBJ% /SUBSYSTEM:WINDOWS /DEBUG /OPT:REF
 

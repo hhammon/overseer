@@ -88,6 +88,8 @@ struct ThreadData {
 	f64           cpu_pct;
 	u64           context_switches;
 	ThreadHistory history;
+	u64           description_len;
+	char          description[256];
 	u64           system_time_last; // Internal
 	u64           user_cpu_last;    // Internal
 	u64           kernel_cpu_last;  // Internal

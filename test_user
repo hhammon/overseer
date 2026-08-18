@@ -1,0 +1,220 @@
+// raddbg 0.9.28 user file
+
+recent_project:
+{
+  path: "overseer.raddebugger"
+  name: ""
+}
+window:
+{
+  size: 1536.000000 864.000000
+  panels:
+  {
+    0.373761:
+    {
+      0.638033:
+      {
+        selected
+        watch:
+        {
+          selected
+          expression: ""
+          watch: address
+          watch: dll_size
+          watch: region
+          watch: ""
+          normal: 0.440774 0.559226
+          watch_expression: expression: "(*a).description_len"
+          watch_expression: expression: "(*a).description"
+          watch_expression: expression: "(*b).description_len"
+          watch_expression: expression: "(*b).description"
+          watch_expression: expression: a
+        }
+        watch: expression: "query:types"
+        watch: expression: "query:locals"
+      }
+      0.361965:
+      {
+        watch: expression: "query:breakpoints"
+        watch:
+        {
+          expression: "query:call_stack"
+          call_stack_frame: 0.050000 0.665462 0.284538
+        }
+        watch: expression: "query:modules"
+        watch: selected expression: "query:targets"
+        watch: expression: "query:threads"
+      }
+    }
+    0.626239:
+    {
+      text:
+      {
+        expression: "query:output"
+        cursor: 0x28f4
+        mark: 0x28db
+        query: input: OUTPUT_DEBUG_STRING_EVENT
+      }
+      watch: expression: "query:processes"
+      disasm: query: input: ""
+      text:
+      {
+        selected
+        expression: "file:\"H:/overseer/src/main.cpp\".data"
+        project: "H:/overseer/overseer.raddebugger"
+        query: input: ""
+        cursor: 0x4c35
+        mark: 0x4c35
+      }
+    }
+  }
+  split_x
+  pos: 2081 108
+  monitor: "\\\\.\\DISPLAY2"
+  smooth_ui_text: 1
+  hint_ui_text: 1
+  smooth_code_text: 1
+  maximized
+}
+keybindings:
+{
+  { kill_all f5 shift }
+  { step_into_inst f11 alt }
+  { step_over_inst f10 alt }
+  { step_out f11 shift }
+  { halt x ctrl shift }
+  { halt pause }
+  { run f5 }
+  { restart f5 ctrl shift }
+  { step_into f11 }
+  { step_over f10 }
+  { run_to_line f10 ctrl }
+  { set_next_statement f10 ctrl shift }
+  { inc_window_font_size equal alt }
+  { dec_window_font_size minus alt }
+  { toggle_fullscreen return ctrl }
+  { new_panel_right p ctrl }
+  { new_panel_down minus ctrl }
+  { rotate_panel_columns 2 ctrl }
+  { next_panel comma ctrl }
+  { prev_panel comma ctrl shift }
+  { focus_panel_right right ctrl alt }
+  { focus_panel_left left ctrl alt }
+  { focus_panel_up up ctrl alt }
+  { focus_panel_down down ctrl alt }
+  { undo z ctrl }
+  { redo y ctrl }
+  { go_back left alt }
+  { go_forward right alt }
+  { close_panel p ctrl shift alt }
+  { next_tab page_down ctrl }
+  { prev_tab page_up ctrl }
+  { next_tab tab ctrl }
+  { prev_tab tab ctrl shift }
+  { move_tab_right page_down ctrl shift }
+  { move_tab_left page_up ctrl shift }
+  { close_tab w ctrl }
+  { tab_bar_top up ctrl shift alt }
+  { tab_bar_bottom down ctrl shift alt }
+  { open_tab t ctrl }
+  { tab_settings t ctrl alt }
+  { open o ctrl }
+  { open_source_file_from_debug_info i ctrl }
+  { switch_to_partner_file o alt }
+  { new_project n ctrl shift }
+  { open_project o ctrl shift }
+  { save_project s ctrl shift }
+  { edit f2 }
+  { accept return }
+  { accept space }
+  { cancel esc }
+  { focus_menu d alt }
+  { move_left left }
+  { move_right right }
+  { move_up up }
+  { move_down down }
+  { move_left_select left shift }
+  { move_right_select right shift }
+  { move_up_select up shift }
+  { move_down_select down shift }
+  { move_left_chunk left ctrl }
+  { move_right_chunk right ctrl }
+  { move_up_chunk up ctrl }
+  { move_down_chunk down ctrl }
+  { move_up_page page_up }
+  { move_down_page page_down }
+  { move_up_whole home ctrl }
+  { move_down_whole end ctrl }
+  { move_left_chunk_select left ctrl shift }
+  { move_right_chunk_select right ctrl shift }
+  { move_up_chunk_select up ctrl shift }
+  { move_down_chunk_select down ctrl shift }
+  { move_up_page_select page_up shift }
+  { move_down_page_select page_down shift }
+  { move_up_whole_select home ctrl shift }
+  { move_down_whole_select end ctrl shift }
+  { move_up_reorder up alt }
+  { move_down_reorder down alt }
+  { move_home home }
+  { move_end end }
+  { move_home_select home shift }
+  { move_end_select end shift }
+  { select_all a ctrl }
+  { delete_single delete }
+  { delete_chunk delete ctrl }
+  { backspace_single backspace }
+  { backspace_chunk backspace ctrl }
+  { copy c ctrl }
+  { copy insert ctrl }
+  { cut x ctrl }
+  { paste v ctrl }
+  { paste insert shift }
+  { insert_text null }
+  { move_next tab }
+  { move_prev tab shift }
+  { goto_line g ctrl }
+  { goto_address g alt }
+  { search f ctrl }
+  { search_backwards r ctrl }
+  { find_next f3 }
+  { find_prev f3 ctrl }
+  { find_selected_thread f4 }
+  { goto_name j ctrl }
+  { goto_name_at_cursor f12 }
+  { toggle_watch_expr_at_cursor w alt }
+  { toggle_watch_expr_at_mouse d ctrl }
+  { toggle_watch_pin f9 ctrl }
+  { toggle_breakpoint f9 }
+  { add_address_breakpoint f9 shift }
+  { add_function_breakpoint f9 ctrl shift }
+  { attach f6 shift }
+  { open_palette f1 }
+  { open_palette p ctrl shift }
+  { log_marker m ctrl shift alt }
+  { toggle_dev_menu d ctrl shift alt }
+}
+current_path: "H:/overseer"
+debug_info:
+{
+  path: "H:/overseer/build/overseer.pdb"
+  timestamp: 66223246261904
+  project: "H:/overseer/overseer.raddebugger"
+}
+debug_info:
+{
+  path: "C:/SymbolCache/ntdll.pdb/180BF1B90AA75697D0EFEA5E5630AC7E1/ntdll.pdb"
+  timestamp: 66219413102160
+  project: "H:/overseer/overseer.raddebugger"
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernel32.pdb/E02F64ED8DA50EC6E7691C0AC0BC25781/kernel32.pdb"
+  timestamp: 66219413090478
+  project: "H:/overseer/overseer.raddebugger"
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernelbase.pdb/53B51385668728BA4297C9C78EEC92DD1/kernelbase.pdb"
+  timestamp: 66219413105335
+  project: "H:/overseer/overseer.raddebugger"
+}

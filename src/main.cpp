@@ -302,6 +302,7 @@ enum ProcessTableColumn {
 
 enum ThreadTableColumn {
 	ThreadTableColumn_TID,
+	ThreadTableColumn_DESCRIPTION,
 	ThreadTableColumn_CPU,
 	ThreadTableColumn_UP_TIME,
 	ThreadTableColumn_CPU_TIME,
@@ -599,11 +600,26 @@ internal void tab_processes(bool polling_changes) {
 	scratch_end();
 }
 
-internal int thread_cmp_tid_asc(ThreadData** a, ThreadData** b) {
+internal int __cdecl thread_cmp_tid_asc(ThreadData** a, ThreadData** b) {
 	return cmp_u64((*a)->tid, (*b)->tid);
 }
-internal int thread_cmp_tid_desc(ThreadData** a, ThreadData** b) {
+internal int __cdecl thread_cmp_tid_desc(ThreadData** a, ThreadData** b) {
 	return -cmp_u64((*a)->tid, (*b)->tid);
+}
+
+internal int thread_cmp_description_asc(ThreadData** a, ThreadData** b) {
+	// Sort threads that have descriptions above those that don't.
+	if ((*a)->description_len == 0 || (*b)->description_len == 0) {
+		return cmp_u64((*b)->description_len, (*a)->description_len);
+	}
+	return _stricmp((*a)->description, (*b)->description);
+}
+internal int thread_cmp_description_desc(ThreadData** a, ThreadData** b) {
+	// Sort threads that have descriptions above those that don't.
+	if ((*a)->description_len == 0 || (*b)->description_len == 0) {
+		return cmp_u64((*b)->description_len, (*a)->description_len);
+	}
+	return -_stricmp((*a)->description, (*b)->description);
 }
 
 internal int __cdecl thread_cmp_cpu_asc(ThreadData** a, ThreadData** b) {
@@ -681,6 +697,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 
 	CString column_names[ThreadTableColumn__COUNT] = {
 		"TID",
+		"Description",
 		"CPU",
 		"Up Time",
 		"CPU Time",
@@ -691,6 +708,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 
 	int (__cdecl* process_comparers_asc[ThreadTableColumn__COUNT])(const void*, const void*) = {
 		(int (__cdecl*)(const void*, const void*))thread_cmp_tid_asc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_description_asc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_asc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_uptime_asc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_time_asc,
@@ -701,6 +719,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 
 	int (__cdecl* process_comparers_desc[ThreadTableColumn__COUNT])(const void*, const void*) = {
 		(int (__cdecl*)(const void*, const void*))thread_cmp_tid_desc,
+		(int (__cdecl*)(const void*, const void*))thread_cmp_description_desc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_desc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_uptime_desc,
 		(int (__cdecl*)(const void*, const void*))thread_cmp_cpu_time_desc,
@@ -777,6 +796,12 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 						)) {
 							selected_thread = thread;
 						}
+					} break;
+					case ThreadTableColumn_DESCRIPTION: {
+						imgui_string((String) {
+							.ptr = thread->description,
+							.len = thread->description_len,
+						});
 					} break;
 					case ThreadTableColumn_CPU: {
 						imgui_printf_right("%05.2lf%%", thread->cpu_pct);

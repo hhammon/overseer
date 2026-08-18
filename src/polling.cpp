@@ -567,12 +567,47 @@ internal u32 WINCALLBACK polling_thread(void* param) {
 
 					thread->context_switches = thread_info->context_switches;
 
+					Handle thread_handle = OpenThread(
+						ThreadAccessFlag_QUERY_LIMITED_INFORMATION,
+						false,
+						thread->tid
+					);
+					wchar_t* description_w;
+					if (SUCCEEDED(GetThreadDescription(thread_handle, &description_w))) {
+						thread->description[0] = '\0';
+						s32 len = WideCharToMultiByte(
+							CP_UTF8,
+							0,
+							description_w,
+							-1,
+							thread->description,
+							sizeof(thread->description),
+							NULL,
+							NULL
+						);
+						if (len > 0) {
+							thread->description_len = len - 1;
+						} else {
+							thread->description_len = 0;
+							for (u32 i = 0; i < sizeof(thread->description); i++) {
+								if (thread->description[i] == '\0') {
+									thread->description_len = i;
+									break;
+								}
+							}
+						}
+					} else {
+						thread->description_len = 0;
+						thread->description[0]  = '\0';
+					}
+					CloseHandle(thread_handle);
+
 					if (!init_thread) { // We have a previous tick for an interval
 						u64 user_diff        = thread_info->user_time   - thread->user_cpu_last;
 						u64 kernel_diff      = thread_info->kernel_time - thread->kernel_cpu_last;
 						u64 system_time_diff = system_time              - thread->system_time_last;
 						u64 cpu_diff         = user_diff + kernel_diff;
-						u64 cpu_total        = system_time_diff * sys_basic_info.number_of_processors;
+						u64 cpu_total        = system_time_diff;
 						thread->cpu_pct     = ((f64)cpu_diff / cpu_total) * 100;
 
 						f64 cpu_pct    = ((f64)cpu_diff    / cpu_total) * 100;

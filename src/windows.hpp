@@ -409,7 +409,6 @@ DLLIMPORT NtStatus NTAPI NtQuerySystemInformation(
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntqueryinformationprocess
  */
-
 DLLIMPORT NtStatus NTAPI NtQueryInformationProcess(
 	Handle        process_handle,
 	ProcInfoClass proc_info_class,
@@ -713,6 +712,30 @@ DLLIMPORT Handle WINAPI OpenProcess(
 	u32                pid
 );
 
+enum_flags(ThreadAccessFlags, u32) {
+	ThreadAccessFlag_TERMINATE                 = 0x0001,
+	ThreadAccessFlag_SUSPEND_RESUME            = 0x0002,
+	ThreadAccessFlag_GET_CONTEXT               = 0x0008,
+	ThreadAccessFlag_SET_CONTEXT               = 0x0010,
+	ThreadAccessFlag_QUERY_INFORMATION         = 0x0040,
+	ThreadAccessFlag_SET_INFORMATION           = 0x0020,
+	ThreadAccessFlag_SET_THREAD_TOKEN          = 0x0080,
+	ThreadAccessFlag_IMPERSONATE               = 0x0100,
+	ThreadAccessFlag_DIRECT_IMPERSONATION      = 0x0200,
+	ThreadAccessFlag_SET_LIMITED_INFORMATION   = 0x0400,
+	ThreadAccessFlag_QUERY_LIMITED_INFORMATION = 0x0800,
+	ThreadAccessFlag_RESUME                    = 0x1000,
+};
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-openthread
+ */
+DLLIMPORT Handle WINAPI OpenThread(
+	ThreadAccessFlags desired_access,
+	b32               inherit_handle,
+	u32               tid
+);
+
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess
  */
@@ -774,9 +797,17 @@ DLLIMPORT void WINAPI Sleep(
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreaddescription
  */
-DLLIMPORT s64 WINAPI SetThreadDescription(
+DLLIMPORT HResult WINAPI SetThreadDescription(
 	Handle   thread,
 	wchar_t* thread_description
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getthreaddescription
+ */
+DLLIMPORT HResult WINAPI GetThreadDescription(
+	Handle    thread,
+	wchar_t** thread_description
 );
 
 #define PAGE_NOACCESS                   0x00000001
