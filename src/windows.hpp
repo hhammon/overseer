@@ -46,10 +46,24 @@ typedef s32 HResult;
  * Much thanks to [Geoff Chappell](geoffchappell.com) and others for their reverse-engineering work.
  */
 
-// NOTE(hhammon) @NtStatus If the value in NtStatus ever becomes relevant, locate it here:
+// NOTE(hhammon) :NtStatus If the value in NtStatus ever becomes relevant, locate it here:
 // #include <ntstatus.h>
 
 #define NT_STATUS_INFO_LENGTH_MISMATCH ((NtStatus)0xc0000004)
+
+/**
+ * https://ntdoc.m417z.com/ntsuspendprocess
+ */
+DLLIMPORT NtStatus NTAPI NtSuspendProcess(
+	Handle process_handle
+);
+
+/**
+ * https://ntdoc.m417z.com/ntresumeprocess
+ */
+DLLIMPORT NtStatus NTAPI NtResumeProcess(
+	Handle process_handle
+);
 
 /**
  * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi/system_information_class.htm
@@ -775,17 +789,29 @@ struct SecurityAttributes {
 	b32   inherit_handle;
 };
 
+typedef u32 (WINCALLBACK ThreadStartRoutine)(void* param);
+
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createthread
  */
 DLLIMPORT Handle WINAPI CreateThread(
 	SecurityAttributes* thread_attributes,
 	u64                 stack_size,
-	u32   (WINCALLBACK* start_address)(void* param),
+	ThreadStartRoutine* start_address,
 	void*               parameter,
 	u32                 creation_flags,
 	u32*                thread_id
 );
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentprocessid
+ */
+DLLIMPORT u32 WINAPI GetCurrentProcessId();
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-getcurrentthread
+ */
+DLLIMPORT Handle WINAPI GetCurrentThread();
 
 /**
  * https://learn.microsoft.com/en-us/windows/win32/api/synchapi/nf-synchapi-sleep
@@ -860,6 +886,11 @@ DLLIMPORT HResult WINAPI GetThreadDescription(
 #define MEM_RELEASE                     0x00008000
 #define MEM_FREE                        0x00010000
 
+#define MEM_PRIVATE                     0x00020000
+#define MEM_MAPPED                      0x00040000
+#define MEM_IMAGE                       0x01000000
+
+
 /**
  *https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc
  */
@@ -877,6 +908,36 @@ DLLIMPORT b32 WINAPI VirtualFree(
 	void* address,
 	u64   size,
 	u32   free_type
+);
+
+struct MemoryBasicInformation {
+	void* base_address;
+	void* allocation_base;
+	u32   allocation_protect;
+	u16   partition_id;
+	u64   region_size;
+	u32   state;
+	u32   protect;
+	u32   type;
+};
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualquery
+ */
+DLLIMPORT u64 WINAPI VirtualQuery(
+	void*                   address,
+	MemoryBasicInformation* buffer,
+	u64                     length
+);
+
+/**
+ * https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualqueryex
+ */
+DLLIMPORT u64 WINAPI VirtualQueryEx(
+	Handle                  process,
+	void*                   address,
+	MemoryBasicInformation* buffer,
+	u64                     length
 );
 
 /**

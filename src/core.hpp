@@ -96,7 +96,7 @@ struct View {
 };
 
 typedef View<char> String;
-typedef String   StringZ; // Guaranteed to be null-terminated
+typedef String     StringZ; // Guaranteed to be null-terminated
 
 #define S(literal) ((StringZ) { \
 	.ptr = (char*)(literal),    \

@@ -35,6 +35,45 @@ internal void create_render_target();
 internal void destroy_render_device();
 internal void destroy_render_target();
 
+StringZ convert_wide_str(Arena* arena, wchar_t* str) {
+	if (!str) return (StringZ){ };
+
+	s32 buffer_size = WideCharToMultiByte(
+		CP_UTF8,
+		0,
+		str,
+		-1,
+		NULL,
+		0,
+		NULL,
+		NULL
+	);
+
+	if (buffer_size <= 0) return { };
+
+	StringZ output = {
+		.len = (u64)buffer_size,
+	};
+	alloc_array(arena, &output);
+
+	s32 result = WideCharToMultiByte(
+		CP_UTF8,
+		0,
+		str,
+		-1,
+		(char*)output.ptr,
+		output.len,
+		NULL,
+		NULL
+	);
+
+
+	if (result <= 0) return { };
+
+	if (output.len) output.len--; // Cut off the null terminator.
+	return output;
+}
+
 internal s64 WINCALLBACK wnd_proc(
 	HWnd window,
 	u32 msg,
@@ -83,7 +122,7 @@ internal StringZ format_timespan(f64 secs, Arena* arena) {
 }
 #define scratch_format_timespan(secs) format_timespan(secs, &scratch_arena)
 
-internal void system_info_row(String name, String value) {
+internal void stat_table_row(String name, String value) {
 	ImGui::TableNextRow();
 	ImGui::TableSetColumnIndex(0);
 	imgui_string(name);
@@ -147,15 +186,15 @@ internal void tab_performance() {
 	if (ImGui::BeginTable("SystemInfo", 2, ImGuiTableFlags_SizingFixedFit)) {
 		scratch_begin();
 
-		system_info_row(
+		stat_table_row(
 			S("Logical Processors"),
 			scratch_sprintf("%llu", system_info->cpu_count)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Up Time"),
 			scratch_format_timespan(system_info->uptime)
 		);
-		system_info_row(
+		stat_table_row(
 			S("CPU Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -163,7 +202,7 @@ internal void tab_performance() {
 				system_info->cpu_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("User Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -171,7 +210,7 @@ internal void tab_performance() {
 				system_info->user_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Kernel Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -179,7 +218,7 @@ internal void tab_performance() {
 				system_info->kernel_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Interrupt Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -187,7 +226,7 @@ internal void tab_performance() {
 				system_info->interrupt_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Deferred Procedure Call Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -195,7 +234,7 @@ internal void tab_performance() {
 				system_info->dpc_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Idle Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -203,7 +242,7 @@ internal void tab_performance() {
 				system_info->idle_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Current CPU Utilization"),
 			scratch_sprintf(
 				"%.2lf%% (User: %.2lf%%, Kernel: %.2lf%%, Interrupt: %.2lf%%, DPC: %.2lf%%)",
@@ -214,7 +253,7 @@ internal void tab_performance() {
 				system_info->dpc_pct_tick
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("RAM"),
 			scratch_sprintf(
 				"%_$$llu / %_$$llu (%.2lf%%)",
@@ -223,7 +262,7 @@ internal void tab_performance() {
 				system_info->ram_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Page File"),
 			scratch_sprintf(
 				"%_$$llu / %_$$llu (%.2lf%%)",
@@ -232,7 +271,7 @@ internal void tab_performance() {
 				system_info->page_file_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Commit Charge"),
 			scratch_sprintf(
 				"%_$$llu / %_$$llu (%.2lf%%)",
@@ -241,7 +280,7 @@ internal void tab_performance() {
 				system_info->commit_pct
 			)
 		);
-		// system_info_row(
+		// stat_table_row(
 		// 	S("Page File Bounds (Min - Max)"),
 		// 	scratch_sprintf(
 		// 		"%_$$llu - %_$$llu",
@@ -249,19 +288,19 @@ internal void tab_performance() {
 		// 		system_info->page_file_max
 		// 	)
 		// );
-		system_info_row(
+		stat_table_row(
 			S("Processes"),
 			scratch_sprintf("%llu", system_info->processes)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Threads"),
 			scratch_sprintf("%llu", system_info->threads)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Handles"),
 			scratch_sprintf("%llu", system_info->handles)
 		);
-		system_info_row(
+		stat_table_row(
 			S("System Calls"),
 			scratch_sprintf(
 				"%llu (+%llu)",
@@ -269,7 +308,7 @@ internal void tab_performance() {
 				system_info->system_calls_tick
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Context Switches"),
 			scratch_sprintf(
 				"%llu (+%llu)",
@@ -609,17 +648,17 @@ internal int __cdecl thread_cmp_tid_desc(ThreadData** a, ThreadData** b) {
 
 internal int thread_cmp_description_asc(ThreadData** a, ThreadData** b) {
 	// Sort threads that have descriptions above those that don't.
-	if ((*a)->description_len == 0 || (*b)->description_len == 0) {
-		return cmp_u64((*b)->description_len, (*a)->description_len);
+	if ((*a)->description.len == 0 || (*b)->description.len == 0) {
+		return cmp_u64((*b)->description.len, (*a)->description.len);
 	}
-	return _stricmp((*a)->description, (*b)->description);
+	return _stricmp((*a)->description.ptr, (*b)->description.ptr);
 }
 internal int thread_cmp_description_desc(ThreadData** a, ThreadData** b) {
 	// Sort threads that have descriptions above those that don't.
-	if ((*a)->description_len == 0 || (*b)->description_len == 0) {
-		return cmp_u64((*b)->description_len, (*a)->description_len);
+	if ((*a)->description.len == 0 || (*b)->description.len == 0) {
+		return cmp_u64((*b)->description.len, (*a)->description.len);
 	}
-	return -_stricmp((*a)->description, (*b)->description);
+	return -_stricmp((*a)->description.ptr, (*b)->description.ptr);
 }
 
 internal int __cdecl thread_cmp_cpu_asc(ThreadData** a, ThreadData** b) {
@@ -664,19 +703,19 @@ internal int thread_cmp_context_switches_desc(ThreadData** a, ThreadData** b) {
 	return -cmp_u64((*a)->context_switches, (*b)->context_switches);
 }
 
-internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
+internal ThreadData* thread_table(ProcessData* process, bool changes) {
 	local_persist ThreadData* selected_thread     = NULL;
 	local_persist s64         pid                 = -1;
 	local_persist u64         process_create_time =  0;
 
 	if ((s64)process->pid != pid || process->create_time != process_create_time) {
-		// NOTE(hhammon) This prevents state state from persisting if tabs switch... Okay for a jam.
+		// NOTE(hhammon) This prevents state from persisting if tabs switch... Okay for a jam.
 		pid = process->pid;
 		process_create_time = process->create_time;
 		selected_thread     = NULL;
 	}
 
-	local_persist Arena arena      = arena_create(1 * GIGABYTE);
+	local_persist Arena arena      = arena_create(1 * MEGABYTE);
 	local_persist bool  arena_init =  false;
 	if (!arena_init) {
 		arena_frame_begin(&arena);
@@ -688,12 +727,31 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 	scratch_begin();
 
 	bool needs_sort = false;
-	if (polling_changes) {
-		arena_frame_end(&arena);
+	if (changes) {
+		arena_frame_end  (&arena);
 		arena_frame_begin(&arena);
 		threads = polling_collect_threads(&arena, process);
 		needs_sort = true;
 	}
+
+	// Set thread descriptions
+	for (u64 i = 0; i < threads.len; i++) {
+		ThreadData* thread = threads[i];
+		Handle thread_handle = OpenThread(
+			ThreadAccessFlag_QUERY_LIMITED_INFORMATION,
+			false,
+			thread->tid
+		);
+		wchar_t* description_w;
+		if (SUCCEEDED(GetThreadDescription(thread_handle, &description_w))) {
+			thread->description = convert_wide_str(&arena, description_w);
+			LocalFree(description_w);
+		} else {
+			thread->description = { };
+		}
+		CloseHandle(thread_handle);
+	}
+
 
 	CString column_names[ThreadTableColumn__COUNT] = {
 		"TID",
@@ -798,10 +856,7 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 						}
 					} break;
 					case ThreadTableColumn_DESCRIPTION: {
-						imgui_string((String) {
-							.ptr = thread->description,
-							.len = thread->description_len,
-						});
+						imgui_string(thread->description);
 					} break;
 					case ThreadTableColumn_CPU: {
 						imgui_printf_right("%05.2lf%%", thread->cpu_pct);
@@ -835,7 +890,525 @@ internal ThreadData* thread_table(ProcessData* process, bool polling_changes) {
 	return selected_thread;
 }
 
+internal void process_vm(ProcessData* process, bool changes, bool is_tab = false) {
+	local_persist s64         pid                 = -1;
+	local_persist u64         process_create_time =  0;
+
+	if ((s64)process->pid != pid || process->create_time != process_create_time) {
+		// NOTE(hhammon) This prevents state from persisting if tabs switch... Okay for a jam.
+		pid = process->pid;
+		process_create_time = process->create_time;
+	}
+
+	local_persist Arena arena      = arena_create(1 * MEGABYTE);
+	local_persist bool  arena_init =  false;
+	if (!arena_init) {
+		arena_frame_begin(&arena);
+		arena_init = true;
+	}
+
+	enum VMType {
+		VMType_NONE,
+		VMType_PRIVATE,
+		VMType_IMAGE,
+		VMType_SECTION,
+	};
+
+	enum VMState {
+		VMState_FREE,
+		VMState_RESERVED,
+		VMState_COMMITTED,
+	};
+
+	enum_flags(VMFlags, u32) {
+		VMFlags_READ  = 1 << 0,
+		VMFlags_WRITE = 1 << 1,
+		VMFlags_EXEC  = 1 << 2,
+		VMFlags_COW   = 1 << 3,
+		VMFlags_GUARD = 1 << 4,
+	};
+
+	struct VMAllocation;
+
+	struct VMRegion {
+		VMAllocation* allocation;
+		uptr          allocation_base;
+		uptr          base;
+		uptr          top;
+		u64           size;
+		VMType        type;
+		VMState       state;
+		VMFlags       flags;
+	};
+
+	struct VMAllocation {
+		uptr           base;
+		uptr           top;
+		u64            size;
+		View<VMRegion> regions;
+		VMType         type;
+	};
+
+	local_persist View<VMRegion>     regions     = { };
+	local_persist View<VMAllocation> allocations = { };
+
+	if (changes) {
+		arena_frame_end  (&arena);
+		arena_frame_begin(&arena);
+
+		if (process->pid == GetCurrentProcessId()) {
+			// TODO(hhammon) This is possible to do, but we would need to suspend all threads but this one
+			// instead of just calling NtSuspendProcess.
+			ImGui::Text("Cannot yet get memory mappings for the current process. (Can be implemented)");
+			return;
+		}
+
+		Handle process_handle = OpenProcess(
+			ProcessAccessFlag_SUSPEND_RESUME    |
+			ProcessAccessFlag_QUERY_INFORMATION |
+			ProcessAccessFlag_VM_READ           |
+			0,
+			false,
+			process->pid
+		);
+
+		if (!process_handle) {
+			// TODO(hhammon) :BetterErrorMessage
+			ImGui::Text("Could not open the process.");
+			return;
+		}
+
+		regions     = { };
+		allocations = { };
+
+		if (FAILED(NtSuspendProcess(process_handle))) {
+			CloseHandle(process_handle);
+			ImGui::Text("Could not suspend the process to query its virtual memory.");
+			return;
+		}
+
+		MemoryBasicInformation region_info;
+		uptr address = NULL;
+		uptr last_allocation_base = (uptr)-1;
+		while (VirtualQueryEx(
+			process_handle,
+			(void*)address,
+			&region_info,
+			sizeof(region_info
+		)) == sizeof(region_info)) {
+			VMRegion* region = alloc_item(&arena, VMRegion);
+
+			if (!region) break;
+
+			*region = { };
+
+			if (!regions.ptr) {
+				regions.ptr = region;
+			}
+			regions.len++;
+
+			region->allocation_base = (uptr)region_info.allocation_base;
+			region->base            = (uptr)region_info.base_address;
+			region->top             = region->base + region_info.region_size;
+			region->size            = region_info.region_size;
+
+			if (region->allocation_base != last_allocation_base) {
+				allocations.len++;
+				last_allocation_base = region->allocation_base;
+			}
+
+			switch (region_info.type) {
+			case 0: {
+				region->type = VMType_NONE;
+			} break;
+			case MEM_PRIVATE: {
+				region->type = VMType_PRIVATE;
+			} break;
+			case MEM_MAPPED: {
+				region->type = VMType_SECTION;
+			} break;
+			case MEM_IMAGE: {
+				region->type = VMType_IMAGE;
+			} break;
+			}
+
+			switch (region_info.state) {
+			case MEM_FREE: {
+				region->state = VMState_FREE;
+			} break;
+			case MEM_RESERVE: {
+				region->state = VMState_RESERVED;
+			} break;
+			case MEM_COMMIT: {
+				region->state = VMState_COMMITTED;
+			} break;
+			}
+
+			switch (region_info.protect & 0xff) {
+			case 0:
+			case PAGE_NOACCESS: {
+				region->flags = 0;
+			} break;
+			case PAGE_READONLY: {
+				region->flags = VMFlags_READ;
+			} break;
+			case PAGE_READWRITE: {
+				region->flags = VMFlags_READ | VMFlags_WRITE;
+			} break;
+			case PAGE_WRITECOPY: {
+				region->flags = VMFlags_READ | VMFlags_WRITE | VMFlags_COW;
+			} break;
+			case PAGE_EXECUTE_READ:
+			case PAGE_EXECUTE: {
+				region->flags = VMFlags_READ | VMFlags_EXEC;
+			} break;
+			case PAGE_EXECUTE_READWRITE: {
+				region->flags = VMFlags_READ | VMFlags_WRITE | VMFlags_EXEC;
+			} break;
+			case PAGE_EXECUTE_WRITECOPY: {
+				region->flags = VMFlags_READ | VMFlags_WRITE | VMFlags_EXEC | VMFlags_COW;
+			} break;
+			}
+
+			if (region_info.protect & PAGE_GUARD) {
+				region->flags |= VMFlags_GUARD;
+			}
+
+			address = region->top;
+		}
+
+		NtResumeProcess(process_handle);
+		CloseHandle    (process_handle);
+
+		alloc_array(&arena, &allocations);
+
+		last_allocation_base = (uptr)-1;
+		s32 allocation_idx   = -1;
+		for (u32 region_idx = 0; region_idx < regions.len; region_idx++) {
+			VMRegion*     region     = &regions[region_idx];
+			VMAllocation* allocation = NULL;
+
+			if (region->allocation_base != last_allocation_base) {
+				if ((u64)(++allocation_idx) >= allocations.len) break;
+				allocation = &allocations[allocation_idx];
+
+				// Free regions will have an allocation base of 0 from Windows, but we don't want that.
+				allocation->base    = region->allocation_base ? region->allocation_base : region->base,
+				allocation->regions = {
+					.ptr = region,
+				};
+			} else {
+				allocation = &allocations[allocation_idx];
+			}
+
+			region->allocation = allocation;
+
+			allocation->top  = region->top;
+			allocation->size = allocation->top - allocation->base;
+			allocation->regions.len++;
+
+			if (region->type == VMType_PRIVATE && allocation->type == VMType_NONE) {
+				allocation->type = VMType_PRIVATE;
+			}
+
+			if (region->type == VMType_SECTION || region->type == VMType_IMAGE) {
+				allocation->type = region->type;
+			}
+		}
+	}
+
+	if (!is_tab) {
+		u32 count_allocations            = 0;
+		u32 count_allocations_private    = 0;
+		u32 count_allocations_section    = 0;
+		u32 count_allocations_image      = 0;
+
+		u64 size_vm                      = 0;
+		u64 size_allocations             = 0;
+		u64 size_private                 = 0;
+		u64 size_private_reserved        = 0;
+		u64 size_private_committed       = 0;
+		u64 size_section                 = 0;
+		u64 size_section_reserved        = 0;
+		u64 size_section_committed       = 0;
+		u64 size_image                   = 0;
+		u64 size_image_reserved          = 0;
+		u64 size_image_committed         = 0;
+		u64 size_free                    = 0;
+		u64 size_reserved                = 0;
+		u64 size_committed               = 0;
+		u64 size_read_only               = 0;
+		u64 size_read_write              = 0;
+		u64 size_read_exec               = 0;
+		u64 size_read_write_exec         = 0;
+		u64 size_private_read_only       = 0;
+		u64 size_private_read_write      = 0;
+		u64 size_private_read_exec       = 0;
+		u64 size_private_read_write_exec = 0;
+		u64 size_section_read_only       = 0;
+		u64 size_section_read_write      = 0;
+		u64 size_section_read_exec       = 0;
+		u64 size_section_read_write_exec = 0;
+		u64 size_image_read_only         = 0;
+		u64 size_image_read_write        = 0;
+		u64 size_image_read_exec         = 0;
+		u64 size_image_read_write_exec   = 0;
+		u64 size_mapped_private          = 0;
+		u64 size_section_private         = 0;
+		u64 size_image_private           = 0;
+
+		if (allocations.len) {
+			size_vm = allocations[allocations.len - 1].top;
+		}
+
+		for (u32 allocation_idx = 0; allocation_idx < allocations.len; allocation_idx++) {
+			VMAllocation allocation = allocations[allocation_idx];
+
+			if (allocation.type != VMType_NONE) {
+				count_allocations++;
+				size_allocations += allocation.size;
+			}
+
+			switch (allocation.type) {
+			case VMType_PRIVATE: {
+				count_allocations_private++;
+			};
+			case VMType_IMAGE: {
+				count_allocations_image++;
+			};
+			case VMType_SECTION: {
+				count_allocations_section++;
+			};
+			}
+		}
+
+		for (u32 region_idx = 0; region_idx < regions.len; region_idx++) {
+			VMRegion     region     = regions[region_idx];
+			VMAllocation allocation = region.allocation ? *region.allocation : (VMAllocation){ };
+
+			VMFlags protect_flags = (
+				VMFlags_READ  |
+				VMFlags_WRITE |
+				VMFlags_EXEC  |
+				0
+			);
+
+			bool is_private         = (region.type == VMType_PRIVATE);
+			bool is_section         = (region.type == VMType_SECTION);
+			bool is_image           = (region.type == VMType_IMAGE);
+
+			bool is_section_alloc   = (allocation.type == VMType_SECTION);
+			bool is_image_alloc     = (allocation.type == VMType_SECTION);
+			bool is_mapped_alloc    = (is_section_alloc | is_image_alloc);
+
+			bool is_free            = (region.state == VMState_FREE || region.type == VMType_NONE);
+			bool is_reserved        = (region.state == VMState_RESERVED);
+			bool is_committed       = (region.state == VMState_COMMITTED);
+
+			bool is_read_only       = (region.flags & protect_flags) == (VMFlags_READ);
+			bool is_read_write      = (region.flags & protect_flags) == (VMFlags_READ | VMFlags_WRITE);
+			bool is_read_exec       = (region.flags & protect_flags) == (VMFlags_READ | VMFlags_EXEC);
+			bool is_read_write_exec = (region.flags & protect_flags) == (protect_flags);
+
+			size_vm += region.size;
+			if (is_private         & true              ) size_private                 += region.size;
+			if (is_private         & is_reserved       ) size_private_reserved        += region.size;
+			if (is_private         & is_committed      ) size_private_committed       += region.size;
+			if (is_section         & true              ) size_section                 += region.size;
+			if (is_section         & is_reserved       ) size_section_reserved        += region.size;
+			if (is_section         & is_committed      ) size_section_committed       += region.size;
+			if (is_image           & true              ) size_image                   += region.size;
+			if (is_image           & is_reserved       ) size_image_reserved          += region.size;
+			if (is_image           & is_committed      ) size_image_committed         += region.size;
+			if (is_free            & true              ) size_free                    += region.size;
+			if (is_reserved        & true              ) size_reserved                += region.size;
+			if (is_committed       & true              ) size_committed               += region.size;
+			if (is_read_only       & true              ) size_read_only               += region.size;
+			if (is_read_write      & true              ) size_read_write              += region.size;
+			if (is_read_exec       & true              ) size_read_exec               += region.size;
+			if (is_read_write_exec & true              ) size_read_write_exec         += region.size;
+			if (is_private         & is_read_only      ) size_private_read_only       += region.size;
+			if (is_private         & is_read_write     ) size_private_read_write      += region.size;
+			if (is_private         & is_read_exec      ) size_private_read_exec       += region.size;
+			if (is_private         & is_read_write_exec) size_private_read_write_exec += region.size;
+			if (is_section         & is_read_only      ) size_section_read_only       += region.size;
+			if (is_section         & is_read_write     ) size_section_read_write      += region.size;
+			if (is_section         & is_read_exec      ) size_section_read_exec       += region.size;
+			if (is_section         & is_read_write_exec) size_section_read_write_exec += region.size;
+			if (is_image           & is_read_only      ) size_image_read_only         += region.size;
+			if (is_image           & is_read_write     ) size_image_read_write        += region.size;
+			if (is_image           & is_read_exec      ) size_image_read_exec         += region.size;
+			if (is_image           & is_read_write_exec) size_image_read_write_exec   += region.size;
+			if (is_mapped_alloc    & is_private        ) size_mapped_private          += region.size;
+			if (is_section_alloc   & is_private        ) size_section_private         += region.size;
+			if (is_image_alloc     & is_private        ) size_image_private           += region.size;
+		}
+
+		if (ImGui::BeginTable("VMStats", 2, ImGuiTableFlags_SizingFixedFit)) {
+			scratch_begin();
+
+			stat_table_row(
+				S("count_allocations"),
+				scratch_sprintf("%lu", count_allocations)
+			);
+			stat_table_row(
+				S("count_allocations_private"),
+				scratch_sprintf("%lu", count_allocations_private)
+			);
+			stat_table_row(
+				S("count_allocations_section"),
+				scratch_sprintf("%lu", count_allocations_section)
+			);
+			stat_table_row(
+				S("count_allocations_image"),
+				scratch_sprintf("%lu", count_allocations_image)
+			);
+			stat_table_row(
+				S("total_size_vm"),
+				scratch_sprintf("%_$$llu", size_vm)
+			);
+			stat_table_row(
+				S("total_size_allocations"),
+				scratch_sprintf("%_$$llu", size_allocations)
+			);
+			stat_table_row(
+				S("total_size_private"),
+				scratch_sprintf("%_$$llu", size_private)
+			);
+			stat_table_row(
+				S("total_size_private_reserved"),
+				scratch_sprintf("%_$$llu", size_private_reserved)
+			);
+			stat_table_row(
+				S("total_size_private_committed"),
+				scratch_sprintf("%_$$llu", size_private_committed)
+			);
+			stat_table_row(
+				S("total_size_section"),
+				scratch_sprintf("%_$$llu", size_section)
+			);
+			stat_table_row(
+				S("total_size_section_reserved"),
+				scratch_sprintf("%_$$llu", size_section_reserved)
+			);
+			stat_table_row(
+				S("total_size_section_committed"),
+				scratch_sprintf("%_$$llu", size_section_committed)
+			);
+			stat_table_row(
+				S("total_size_image"),
+				scratch_sprintf("%_$$llu", size_image)
+			);
+			stat_table_row(
+				S("total_size_image_reserved"),
+				scratch_sprintf("%_$$llu", size_image_reserved)
+			);
+			stat_table_row(
+				S("total_size_image_committed"),
+				scratch_sprintf("%_$$llu", size_image_committed)
+			);
+			stat_table_row(
+				S("total_size_free"),
+				scratch_sprintf("%_$$llu", size_free)
+			);
+			stat_table_row(
+				S("total_size_reserved"),
+				scratch_sprintf("%_$$llu", size_reserved)
+			);
+			stat_table_row(
+				S("total_size_committed"),
+				scratch_sprintf("%_$$llu", size_committed)
+			);
+			stat_table_row(
+				S("total_size_read_only"),
+				scratch_sprintf("%_$$llu", size_read_only)
+			);
+			stat_table_row(
+				S("total_size_read_write"),
+				scratch_sprintf("%_$$llu", size_read_write)
+			);
+			stat_table_row(
+				S("total_size_read_exec"),
+				scratch_sprintf("%_$$llu", size_read_exec)
+			);
+			stat_table_row(
+				S("total_size_read_write_exec"),
+				scratch_sprintf("%_$$llu", size_read_write_exec)
+			);
+			stat_table_row(
+				S("total_size_private_read_only"),
+				scratch_sprintf("%_$$llu", size_private_read_only)
+			);
+			stat_table_row(
+				S("total_size_private_read_write"),
+				scratch_sprintf("%_$$llu", size_private_read_write)
+			);
+			stat_table_row(
+				S("total_size_private_read_exec"),
+				scratch_sprintf("%_$$llu", size_private_read_exec)
+			);
+			stat_table_row(
+				S("total_size_private_read_write_exec"),
+				scratch_sprintf("%_$$llu", size_private_read_write_exec)
+			);
+			stat_table_row(
+				S("total_size_section_read_only"),
+				scratch_sprintf("%_$$llu", size_section_read_only)
+			);
+			stat_table_row(
+				S("total_size_section_read_write"),
+				scratch_sprintf("%_$$llu", size_section_read_write)
+			);
+			stat_table_row(
+				S("total_size_section_read_exec"),
+				scratch_sprintf("%_$$llu", size_section_read_exec)
+			);
+			stat_table_row(
+				S("total_size_section_read_write_exec"),
+				scratch_sprintf("%_$$llu", size_section_read_write_exec)
+			);
+			stat_table_row(
+				S("total_size_image_read_only"),
+				scratch_sprintf("%_$$llu", size_image_read_only)
+			);
+			stat_table_row(
+				S("total_size_image_read_write"),
+				scratch_sprintf("%_$$llu", size_image_read_write)
+			);
+			stat_table_row(
+				S("total_size_image_read_exec"),
+				scratch_sprintf("%_$$llu", size_image_read_exec)
+			);
+			stat_table_row(
+				S("total_size_image_read_write_exec"),
+				scratch_sprintf("%_$$llu", size_image_read_write_exec)
+			);
+			stat_table_row(
+				S("total_size_mapped_private"),
+				scratch_sprintf("%_$$llu", size_mapped_private)
+			);
+			stat_table_row(
+				S("total_size_section_private"),
+				scratch_sprintf("%_$$llu", size_section_private)
+			);
+			stat_table_row(
+				S("total_size_image_private"),
+				scratch_sprintf("%_$$llu", size_image_private)
+			);
+
+			scratch_end();
+			ImGui::EndTable();
+		}
+	} else {
+
+	}
+}
+
 internal void tab_process(ProcessData* process, bool polling_changes) {
+	local_persist ProcessData* last_process;
+	bool changes = polling_changes || (process != last_process);
+	last_process = process;
+
 	local_persist ThreadData* selected_thread = NULL;
 
 	if (ImPlot::BeginPlot("CPU Usage", ImVec2(-1, ImGui::GetTextLineHeight() * 15))) {
@@ -924,15 +1497,15 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 	if (ImGui::BeginTable("SystemInfo", 2, ImGuiTableFlags_SizingFixedFit)) {
 		scratch_begin();
 
-		system_info_row(
+		stat_table_row(
 			S("Process"),
 			scratch_sprintf("%s (PID: %llu)", process->image_name, process->pid)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Up Time"),
 			scratch_format_timespan(process->uptime)
 		);
-		system_info_row(
+		stat_table_row(
 			S("CPU Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -940,7 +1513,7 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				process->cpu_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("User Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -948,7 +1521,7 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				process->user_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Kernel Time"),
 			scratch_sprintf(
 				"%s (%.2lf%%)",
@@ -956,7 +1529,7 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				process->kernel_pct
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Current CPU Utilization"),
 			scratch_sprintf(
 				"%.2lf%% (User: %.2lf%%, Kernel: %.2lf%%)",
@@ -965,7 +1538,7 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				process->kernel_pct_tick
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("RAM"),
 			scratch_sprintf(
 				"%_$$llu / %_$$llu (%.2lf%%)",
@@ -974,7 +1547,7 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				(f64)process->ram / system_info->ram_size * 100
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Commit Charge"),
 			scratch_sprintf(
 				"%_$$llu / %_$$llu (%.2lf%%)",
@@ -983,11 +1556,11 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 				(f64)process->commit / system_info->commit_limit * 100
 			)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Threads"),
 			scratch_sprintf("%llu", process->threads.count)
 		);
-		system_info_row(
+		stat_table_row(
 			S("Handles"),
 			scratch_sprintf("%llu", process->handle_count)
 		);
@@ -996,7 +1569,21 @@ internal void tab_process(ProcessData* process, bool polling_changes) {
 		scratch_end();
 	}
 
-	selected_thread = thread_table(process, polling_changes);
+	local_persist bool update_thread_table = true;
+	if (changes) update_thread_table       = true;
+	if (ImGui::CollapsingHeader("Threads")) {
+		selected_thread = thread_table(process, update_thread_table);
+	} else {
+		update_thread_table = true;
+	}
+
+	local_persist bool update_process_vm = true;
+	if (changes) update_process_vm       = true;
+	if (ImGui::CollapsingHeader("Virtual Memory")) {
+		process_vm(process, update_process_vm);
+	} else {
+		update_process_vm = true;
+	}
 }
 
 internal void process_tabs(bool polling_changes) {
@@ -1153,6 +1740,8 @@ int WINAPI wWinMain(
 	unused_var(prev_instance);
 	unused_var(cmd_line);
 	unused_var(cmd_show);
+
+	SetThreadDescription(GetCurrentThread(), L"MainThread");
 
 	scratch_init();
 

@@ -88,8 +88,10 @@ struct ThreadData {
 	f64           cpu_pct;
 	u64           context_switches;
 	ThreadHistory history;
-	u64           description_len;
-	char          description[256];
+	// TODO(hhammon) LOL, the architecture of this project is insane because it was hacked together for a jam,
+	// and now I'm continuing work on it. This all needs to be done differently. Description here is just for
+	// the user of this API to set to have somewhere to store, but nothing in `polling` sets it.
+	StringZ       description;
 	u64           system_time_last; // Internal
 	u64           user_cpu_last;    // Internal
 	u64           kernel_cpu_last;  // Internal
