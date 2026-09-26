@@ -10,7 +10,7 @@ window:
   size: 1536 864
   panels:
   {
-    0.356400:
+    0.279269:
     {
       0.503705:
       {
@@ -22,11 +22,36 @@ window:
           watch: dll_size
           watch: region
           watch: ""
-          normal: 0.301485 0.698515
+          normal: 0.275275 0.724725
           watch_expression:
           {
             project: ""
-            expression: module
+            expression: block_list_head
+          }
+          watch_expression:
+          {
+            project: ""
+            expression: block_free_list_head
+          }
+          watch_expression:
+          {
+            project: ""
+            expression: scratch_arena
+          }
+          watch_expression:
+          {
+            project: ""
+            expression: pages_committed
+          }
+          watch_expression:
+          {
+            project: ""
+            expression: block_free_list_tail
+          }
+          watch_expression:
+          {
+            project: ""
+            expression: "(ArenaFrame*)(scratch_arena.head + 1)"
           }
         }
         watch: expression: "query:types"
@@ -35,7 +60,6 @@ window:
       }
       0.496293:
       {
-        selected
         watch:
         {
           expression: "query:breakpoints"
@@ -52,7 +76,7 @@ window:
         watch: expression: "query:threads"
       }
     }
-    0.310265:
+    0.335075:
     {
       text:
       {
@@ -62,35 +86,47 @@ window:
         cursor: 0x4872
         mark: 0x4872
       }
-      disasm: selected query: input: ""
+      disasm: query: input: ""
+      watch: expression: "query:processes"
       text:
       {
-        expression: "file:\"H:/raddebugger_modified/src/win32/demon/win32_demon.c\".data"
+        selected
+        expression: "file:\"H:/finance-app-web/src/arena_debug.cpp\".data"
         auto: 1
         project: ""
         query:
         {
-          input: ""
+          input: Finally
           cmd: search
         }
-        cursor: 0x13918
-        mark: 0x13918
+        cursor: 0x4e0
+        mark: 0x4e0
         cursor_line: 1
         cursor_column: 1
         mark_line: 1
         mark_column: 1
-        font_size: 11
       }
-      watch: expression: "query:processes"
     }
-    0.333333: text:
+    0.385653:
     {
       selected
-      expression: "query:output"
-      query: input: ""
-      cursor: 0xe
-      mark: 0xe
-      scroll_to_bottom_on_change: 1
+      text:
+      {
+        selected
+        expression: "query:output"
+        query: input: ""
+        cursor: 0x14ba
+        mark: 0x14ba
+        scroll_to_bottom_on_change: 1
+      }
+      memory:
+      {
+        expression: memory
+        zoom: 1.000000f
+        size: "sys_pages_committed << 16"
+        cursor: 0x16d40710030
+        mark: 0x16d40710030
+      }
     }
   }
   split_x
@@ -219,55 +255,6 @@ keybindings:
   { toggle_dev_menu d ctrl shift alt }
 }
 current_path: "H:/overseer"
-breakpoint:
-{
-  project: ""
-  source_location: "C:/Users/Hyrum Hammon/coding/raddebugger/src/dbg_engine/dbg_engine_ctrl.c:4436:1"
-  enabled: 0
-  hit_count: 0
-}
-breakpoint:
-{
-  project: ""
-  address_location: WriteProcessMemory
-  hit_count: 0
-  enabled: 0
-}
-breakpoint:
-{
-  project: ""
-  address_location: VirtualQueryEx
-  enabled: 0
-  hit_count: 0
-}
-breakpoint:
-{
-  project: ""
-  address_location: CreateToolhelp32Snapshot
-  hit_count: 0
-  enabled: 0
-}
-breakpoint:
-{
-  project: ""
-  address_location: w32_dmn_module_info_from_process_module
-  hit_count: 0
-  enabled: 0
-}
-breakpoint:
-{
-  project: ""
-  source_location: "../raddebugger_modified/src/win32/demon/win32_demon.c:2391:75"
-  hit_count: 0
-  enabled: 0
-}
-breakpoint:
-{
-  project: ""
-  source_location: "../raddebugger_modified/src/win32/demon/win32_demon.c:506:1"
-  enabled: 0
-  hit_count: 0
-}
 debug_info:
 {
   path: "C:/Users/Hyrum Hammon/handmade/overseer/build/overseer.pdb"
@@ -291,4 +278,34 @@ debug_info:
   path: "C:/SymbolCache/kernelbase.pdb/53B51385668728BA4297C9C78EEC92DD1/kernelbase.pdb"
   timestamp: 66219413105335
   project: "H:/overseer/overseer.raddebugger"
+}
+breakpoint:
+{
+  project: ""
+  source_location: "../finance-app-web/src/arena_debug.cpp:62:1"
+  hit_count: 1
+}
+debug_info:
+{
+  path: "H:/finance-app-web/build/arena_debug.pdb"
+  timestamp: 66225665325197
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/ntdll.pdb/180BF1B90AA75697D0EFEA5E5630AC7E1/ntdll.pdb"
+  timestamp: 66219413102160
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernel32.pdb/E02F64ED8DA50EC6E7691C0AC0BC25781/kernel32.pdb"
+  timestamp: 66219413090478
+  project: ""
+}
+debug_info:
+{
+  path: "C:/SymbolCache/kernelbase.pdb/53B51385668728BA4297C9C78EEC92DD1/kernelbase.pdb"
+  timestamp: 66219413105335
+  project: ""
 }

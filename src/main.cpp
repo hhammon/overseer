@@ -1716,7 +1716,7 @@ internal void do_ui() {
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Performance")) {
-			if (ImGui::BeginChild("ProcessesBody")) {
+			if (ImGui::BeginChild("PerformanceBody")) {
 				tab_performance();
 			}
 			ImGui::EndChild();
